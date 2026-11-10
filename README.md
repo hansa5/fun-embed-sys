@@ -49,3 +49,8 @@ network details before making the site public.
 ## Browse the guides
 
 Run the [Streamlit documentation browser](docs/README.md) to browse Markdown files under `docs/`. It discovers new Markdown files recursively.
+
+
+## Run the docs browser on a Pi
+
+See [Streamlit app on Raspberry Pi](docs/rpi/streamlit_app.md) for GitHub access, dependencies, `git pull`, and a localhost-only `systemd` service.

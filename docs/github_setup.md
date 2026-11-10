@@ -59,7 +59,7 @@ Change this repository's remote from HTTPS to SSH once the key works:
 
 ```sh
 cd /path/to/fun-embed-sys
-git remote set-url origin git@github.com:a143416/fun-embed-sys.git
+git remote set-url origin git@github.com:hansa5/fun-embed-sys.git
 git remote -v
 ```
 
@@ -86,7 +86,7 @@ On the Pi's checkout, use the SSH remote and test it:
 
 ```sh
 cd /path/to/fun-embed-sys
-git remote set-url origin git@github.com:a143416/fun-embed-sys.git
+git remote set-url origin git@github.com:hansa5/fun-embed-sys.git
 ssh -T git@github.com
 git fetch origin
 ```
