@@ -1,198 +1,170 @@
-To organize your music library in Plex so that it works better with Alexa, you can follow these steps:
+# Raspberry Pi media server
 
-Organizing Your Music Library
-Folder Structure: Ensure your music is organized in a clear folder structure. A common structure is:
+This guide covers a basic Plex media server: install Raspberry Pi OS, connect
+over SSH, mount a USB drive at a stable path, and copy media to it. Replace
+`piuser`, `mediaserver`, and example file paths with your own values.
 
-/Music
-    /Artist Name
-        /Album Name
-            /01 - Track Name.mp3
+For general OS installation and SSH setup, see [Install Raspberry Pi OS](os_install.md)
+and [General setup](general.md). The original [Pimylifeup Plex guide](https://pimylifeup.com/raspberry-pi-plex-server/)
+is a useful additional reference; use Plex's current official instructions for
+installation steps that depend on the OS release.
 
-Tagging: Make sure all your music files are properly tagged with metadata. This includes the artist name, album name, track title, and track number. Tools like MusicBrainz Picard or MP3Tag can help with this.
+## 1. Install and prepare Raspberry Pi OS
 
-Library Settings in Plex:
+1. Install Raspberry Pi OS using the [OS installation guide](os_install.md).
+   In Raspberry Pi Imager's customization settings, set a hostname (for
+   example, `mediaserver`), create your own user, configure Wi-Fi if needed,
+   and enable SSH.
+2. Connect to the Pi from a computer on the same network:
 
-Go to your Plex Web App.
-Navigate to Settings > Libraries.
-Select your music library and click Edit.
-Ensure that the Agent is set to Plex Music and the Scanner is set to Plex Music Scanner.
-Consider enabling Use embedded tags to prioritize your file tags over online metadata.
-Using Alexa with Plex
-Enable Plex Skill: Make sure the Plex skill is enabled in your Alexa app. You can find it by searching for "Plex" in the Alexa Skills store.
+   ```sh
+   ssh piuser@mediaserver.local
+   ```
 
-Link Your Account: Follow the instructions to link your Plex account with Alexa.
+   If `.local` name resolution is unavailable, use the Pi's IP address instead.
+3. Update the Pi, then reboot if the upgrade requests it:
 
-Voice Commands:
+   ```sh
+   sudo apt update
+   sudo apt full-upgrade
+   sudo reboot
+   ```
 
-To play music by artist: "Alexa, ask Plex to play [Artist Name]."
-To play a specific song: "Alexa, ask Plex to play the song [Song Name]."
-To play an album: "Alexa, ask Plex to play the album [Album Name] by [Artist Name]."
+   Reconnect over SSH after it starts again.
 
-Tagging metadata on a Linux machine can be accomplished using various tools, both command-line and GUI-based. Here are some popular options and detailed instructions on how to use them:
+## 2. Identify and prepare the media drive
 
-Command-Line Tools
-1. eyeD3
-eyeD3 is a command-line tool for working with audio file metadata, particularly MP3 files.
-
-Installation:
-
-sudo apt-get install eyed3
-
-Usage:
-
-To view tags:
-eyed3 /path/to/song.mp3
-
-To set tags:
-eyed3 --artist "Artist Name" --album "Album Name" --title "Track Title" --track-num 1 /path/to/song.mp3
-
-2. id3v2
-id3v2 is another command-line tool specifically for editing ID3 tags on MP3 files.
-
-Installation:
-
-sudo apt-get install id3v2
-
-Usage:
-
-To view tags:
-id3v2 -l /path/to/song.mp3
-
-To set tags:
-id3v2 -a "Artist Name" -A "Album Name" -t "Track Title" -T 1 /path/to/song.mp3
-
-GUI Tools
-1. MusicBrainz Picard
-MusicBrainz Picard is a powerful music tagger that uses the MusicBrainz database to automatically tag your music files.
-
-Installation:
-
-On Ubuntu and derivatives:
-sudo apt-get install picard
-
-Alternatively, you can download the AppImage from the MusicBrainz Picard website.
-Usage:
-
-Open Picard and add your music files or folders.
-Picard will attempt to match your files with its database.
-Review the matches and make any necessary adjustments.
-Save the changes to update the metadata.
-2. Kid3
-Kid3 is a versatile tag editor that supports many audio formats.
-
-Installation:
-
-On Ubuntu and derivatives:
-sudo apt-get install kid3
-
-Usage:
-
-Launch Kid3 and open your music files or folders.
-Edit the tags in the provided fields.
-Save the changes to update the metadata.
-Tips for Tagging
-
-
-
-# mount Drive
+Connect the USB SSD or hard drive, then identify its partition, filesystem,
+and UUID:
 
 ```sh
-lex@mediaserver:~ $ lsblk
-NAME        MAJ:MIN RM   SIZE RO TYPE MOUNTPOINTS
-sda           8:0    1 238.3G  0 disk 
-└─sda1        8:1    1 238.3G  0 part 
-sdb           8:16   1 119.3G  0 disk 
-└─sdb1        8:17   1 119.2G  0 part 
-mmcblk0     179:0    0  14.5G  0 disk 
-├─mmcblk0p1 179:1    0   512M  0 part /boot/firmware
-└─mmcblk0p2 179:2    0    14G  0 part /
-
-# create a mount point
-plex@mediaserver:~ $ sudo mkdir -p /media/plex/PLEXMEDIA/
-
-# mount the drive
-plex@mediaserver:~ $ sudo mount /dev/sda1 /media/plex/PLEXMEDIA
-mount: (hint) your fstab has been modified, but systemd still uses
-       the old version; use 'systemctl daemon-reload' to reload.
-plex@mediaserver:~ $ systemctl daemon-reload
-==== AUTHENTICATING FOR org.freedesktop.systemd1.reload-daemon ====
-Authentication is required to reload the systemd state.
-Authenticating as: ,,, (plex)
-Password: 
-==== AUTHENTICATION COMPLETE ====
+lsblk -o NAME,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINTS
 ```
 
-Batch Processing: Many of these tools allow batch processing, which can save time if you have a large music library.
-Consistency: Ensure consistency in your tags (e.g., artist names and album titles) to improve organization.
-Backup: Before making bulk changes, consider backing up your music files.
-By using these tools, you can effectively manage and update the metadata of your music files on a Linux machine, ensuring better organization and compatibility with media servers like Plex.
+Use the partition (for example, `/dev/sda1`), not the whole disk (`/dev/sda`).
+Device names such as `/dev/sda1` can change between boots, so use the UUID in
+the persistent mount configuration below. Do not format a drive that contains
+files you want to keep; formatting erases its data.
 
+This example assumes the partition is already formatted as `ext4`. If yours
+uses another filesystem, use the filesystem shown by `lsblk` and check its
+mount options before copying the example. In particular, filesystems such as
+exFAT do not store Linux ownership and permissions in the same way as ext4.
 
-## Music Tag
-For Linux users, there are several excellent metadata editors available that can help you manage and edit audio metadata effectively. Here are a few popular options:
+## 3. Mount the drive at the same path on every boot
 
-MusicBrainz Picard:
+Choose a permanent mount point. This guide uses `/srv/media`:
 
-Description: MusicBrainz Picard is a powerful open-source music tagger that uses the MusicBrainz database to identify and tag your music files. It supports a wide range of audio formats and can automatically fetch metadata for your tracks.
-Features: Cluster files, lookup and scan for metadata, support for plugins, and scripting for advanced tagging.
-Installation: Available in most Linux distribution repositories. You can install it using package managers like apt, dnf, or pacman.
-Kid3:
-
-Description: Kid3 is a versatile audio tag editor that supports all major audio file formats. It allows you to edit tags in batches, making it easy to manage large music libraries.
-Features: Edit ID3v1, ID3v2, and other tag formats, convert between different tag formats, and import metadata from online databases.
-Installation: Available in most Linux distribution repositories. Install it using your package manager.
-Puddletag:
-
-Description: Puddletag is a tag editor similar to Mp3tag for Windows, but designed for Linux. It provides a spreadsheet-like interface for editing tags, making it intuitive for batch processing.
-Features: Supports multiple audio formats, scripting, and can fetch metadata from various online sources.
-Installation: Available in some Linux distribution repositories or can be installed from its website.
-EasyTAG:
-
-Description: EasyTAG is a simple and easy-to-use tag editor for audio files. It supports a wide range of formats and provides a straightforward interface for editing metadata.
-Features: Batch processing, CDDB support, and automatic tag generation from file names.
-Installation: Available in most Linux distribution repositories.
-These tools should cover a wide range of needs for managing audio metadata on Linux, allowing you to keep your music library well-organized and easily accessible through Plex and Alexa.
-
-
-## Serve Audio
-When comparing "My Media for Alexa" and Plex in terms of integration with Alexa, there are several factors to consider:
-
-My Media for Alexa
-Pros:
-
-Voice Control: My Media for Alexa is specifically designed to integrate with Alexa, allowing you to use voice commands to play music from your personal library.
-Ease of Use: Once set up, it can be relatively straightforward to use with Alexa voice commands.
-Direct Integration: It is built to work with Alexa, so the integration is more seamless for voice commands compared to Plex.
-Cons:
-
-Setup Complexity: Requires setting up a server on your computer, which might be a bit technical for some users.
-Limited Free Features: While there is a free version, some features may require a subscription.
-Device Dependency: Your computer or server needs to be running for the service to work.
-Plex
-Pros:
-
-Robust Media Management: Plex is excellent for organizing large media libraries, offering rich metadata and a wide range of media types.
-Multi-Platform Support: Works across various devices and platforms, not just Alexa.
-Free Tier Available: Offers a free tier with basic functionality.
-Cons:
-
-Limited Alexa Integration: Plex's integration with Alexa is not as seamless for voice control as My Media. You might find it less intuitive to use voice commands for specific tracks or playlists.
-Metadata Issues: As you've experienced, Plex can sometimes struggle with correctly identifying and organizing music metadata, which can affect playback through Alexa.
-Complex Setup: Similar to My Media, setting up Plex can be complex, especially if you want to optimize it for music playback.
-Conclusion
-If your primary goal is to have a smooth voice-controlled experience with Alexa, "My Media for Alexa" is likely the better choice, as it is specifically designed for this purpose. However, if you need a more comprehensive media management solution that supports various media types and platforms, Plex might be more suitable, though it may not offer the best Alexa integration for music playback.
-
-Ultimately, the decision depends on your specific needs: whether you prioritize voice control with Alexa or broader media management capabilities.
-
-
-
-## My media Server for Alexa
-https://www.mymediaalexa.com/home/raspberrypi
-
-
-## Copy Files over Netwrok
 ```sh
-scp "/home/saman/Desktop/Movies/The Rookies/Season 02/"*.mp4 plex@mediaserver.local:"/media/plex/PLEXMEDIA/TV Shows/The Rookies/Season 02/" 
+sudo mkdir -p /srv/media
+sudo blkid /dev/sda1
 ```
 
-http://mediaserver.local:32400/web/index.html
+Copy the `UUID` value for the correct partition from the output. Edit the
+filesystem table:
+
+```sh
+sudo nano /etc/fstab
+```
+
+Add one line at the end, replacing `YOUR-UUID` with the actual UUID. Keep
+`ext4` only if that is the drive's filesystem:
+
+```fstab
+UUID=YOUR-UUID /srv/media ext4 defaults,nofail,x-systemd.device-timeout=10 0 2
+```
+
+`nofail` lets the Pi finish booting if the drive is disconnected; the mount
+will be unavailable until the drive is connected and mounted. Do not add a
+duplicate entry if this drive is already listed in `/etc/fstab`.
+
+Check the configuration and mount it now:
+
+```sh
+sudo findmnt --verify
+sudo systemctl daemon-reload
+sudo mount -a
+findmnt /srv/media
+df -h /srv/media
+```
+
+Confirm that `findmnt` shows the expected drive at `/srv/media`. Reboot to
+verify that it mounts automatically:
+
+```sh
+sudo reboot
+```
+
+Reconnect and run `findmnt /srv/media` again. If it is not mounted, check the
+UUID, filesystem type, and `/etc/fstab` entry before trying again. Do not copy
+files into `/srv/media` until you have confirmed the drive is mounted; otherwise
+the files may be written to the Pi's SD card instead.
+
+```sh
+ssh plex@mediaserver.local
+sudo mount /dev/sda1 /media/plex/PLEXMEDIA
+systemctl daemon-reload
+```
+## 4. Allow Plex and your SSH user to access the media
+
+Install Plex using the current instructions from
+[Plex Support](https://support.plex.tv/articles/200264746-quick-start-step-1-installation/).
+The following permission example is for an ext4 drive and a Plex installation
+that runs as the `plex` user:
+
+```sh
+sudo usermod -aG plex "$USER"
+sudo chown -R "$USER":plex /srv/media
+sudo chmod -R g+rwX /srv/media
+sudo find /srv/media -type d -exec chmod g+s {} +
+```
+
+The ownership and permission commands may take a while for a large library.
+Reconnect over SSH after `usermod` so the new group membership takes effect.
+If Plex uses a different service account, or the drive uses exFAT/NTFS, check
+the Plex and filesystem documentation rather than applying these ext4
+commands unchanged.
+
+## 5. Copy files from your computer
+
+Create a destination directory on the Pi (change `piuser` if necessary):
+
+```sh
+ssh plex@mediaserver.local 'mkdir -p /srv/media/Movies'
+```
+
+Copy one file:
+
+```sh
+scp "/home/youruser/Videos/Example Movie.mp4" \
+  piuser@mediaserver.local:"/srv/media/Movies/"
+```
+
+Copy a directory and its contents:
+
+```sh
+scp -r "/home/youruser/Videos/Season 02" \
+  piuser@mediaserver.local:"/srv/media/TV Shows/"
+```
+
+These `scp` commands run on your computer, not in the SSH session on the Pi.
+Keep paths with spaces quoted. Confirm the copy on the Pi with `ls` before
+adding or refreshing the Plex library.
+
+## 6. Open Plex
+
+From a browser on your local network, open:
+
+```text
+http://mediaserver.local:32400/web
+```
+
+If the hostname does not resolve, substitute the Pi's IP address. In Plex,
+create libraries that point to folders under `/srv/media`.
+
+## Further reading
+
+- [Raspberry Pi OS installation](os_install.md)
+- [General Raspberry Pi setup and SSH](general.md)
+- [Plex installation quick start](https://support.plex.tv/articles/200264746-quick-start-step-1-installation/)
+- [Pimylifeup: Raspberry Pi Plex server](https://pimylifeup.com/raspberry-pi-plex-server/)

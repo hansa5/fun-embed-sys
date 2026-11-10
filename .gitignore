@@ -130,3 +130,5 @@ dmypy.json
 
 # vscode
 .vscode/
+# Personal access token file; keep credentials out of Git
+/git_token
