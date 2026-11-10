@@ -44,3 +44,8 @@ network details before making the site public.
 ## GitHub access
 
 - [GitHub setup for the laptop and Raspberry Pi](docs/github_setup.md) — SSH keys, GitHub CLI, and safe handling of personal access tokens.
+
+
+## Browse the guides
+
+Run the [Streamlit documentation browser](docs/README.md) to browse Markdown files under `docs/`. It discovers new Markdown files recursively.
