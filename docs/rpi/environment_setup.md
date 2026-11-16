@@ -28,6 +28,10 @@ support, and native build tools. It installs `uv` in the current user's local
 bin directory and runs `uv sync`, which creates `.venv` and installs the
 locked dependencies. It does not install Python packages globally.
 
+If a future dependency needs native compilation, install its documented
+system headers first (for example, OpenSSL or libffi development packages),
+then run `./install.sh` again.
+
 ## Add or change Python packages
 
 The editable dependency list is in the root `pyproject.toml`. From the repo

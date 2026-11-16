@@ -10,7 +10,7 @@ if [[ "$(uname -s)" != Linux ]] || ! command -v apt-get >/dev/null 2>&1; then
 fi
 
 missing=()
-for package in git curl ca-certificates python3 python3-venv python3-dev build-essential pkg-config libffi-dev libssl-dev; do
+for package in git curl ca-certificates python3 python3-venv python3-dev build-essential pkg-config; do
   dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed' || missing+=("$package")
 done
 if ((${#missing[@]})); then
