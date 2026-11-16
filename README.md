@@ -53,4 +53,7 @@ Run the [Streamlit documentation browser](docs/README.md) to browse Markdown fil
 
 ## Run the docs browser on a Pi
 
-See [Streamlit app on Raspberry Pi](docs/rpi/streamlit_app.md) for GitHub access, dependencies, `git pull`, and a localhost-only `systemd` service.
+See [Raspberry Pi environment setup](docs/rpi/environment_setup.md) for
+dependencies and the `uv` environment, then [Streamlit app on Raspberry Pi](docs/rpi/streamlit_app.md)
+for deployment and automatic startup. [Tailscale setup](docs/tailscale/README.md)
+explains private HTTPS access from a phone or laptop.

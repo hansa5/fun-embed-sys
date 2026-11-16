@@ -7,17 +7,18 @@ Relative links between Markdown guides open the linked document in the app.
 
 ## Run on a Raspberry Pi
 
-For Raspberry Pi OS package installation, safe GitHub access, cloning and
-pulling updates, virtual environment setup, and running Streamlit as a
-localhost-only user service, follow the [Pi deployment guide](rpi/streamlit_app.md).
+Start with the [Raspberry Pi environment setup](rpi/environment_setup.md),
+then follow the [Pi deployment guide](rpi/streamlit_app.md) to run the docs
+browser as a boot-enabled service. For secure remote access, see
+[Tailscale setup](tailscale/README.md).
 
 ## Run on a laptop
 
-From the repository root, install `docs/requirements.txt` in a virtual
-environment, then run:
+From the repository root, run `./install.sh` to prepare the `uv` environment,
+then start the app with:
 
 ```sh
-streamlit run docs/app.py
+./run-app.sh
 ```
 
 Streamlit prints the local URL in the terminal.
