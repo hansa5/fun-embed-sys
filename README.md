@@ -37,7 +37,7 @@ network details before making the site public.
 
 | Name | Hostname | Purpose |
 | --- | --- | --- |
-| Salman | `Hansa.local` | Trading and stock learning |
+| Saman | `Hansa.local` | Trading and stock learning |
 | Plex | `media-server.local` | Media server on the local network |
 
 

@@ -74,7 +74,7 @@ ssh-keygen -t ed25519 -C "plex-pi-github"
 cat ~/.ssh/id_ed25519.pub
 ```
 
-Use a unique comment for each device, such as `salman-pi-github` or
+Use a unique comment for each device, such as `saman-pi-github` or
 `plex-pi-github`. Add this Pi's public key in GitHub under **Settings > SSH and
 GPG keys > New SSH key** if the Pi needs the same account access as the laptop.
 For a Pi that only needs to pull one repository, a repository **read-only
