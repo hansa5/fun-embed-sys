@@ -1,9 +1,10 @@
 # Tailscale access to Raspberry Pi applications
 
-Tailscale connects your Pi and your trusted devices to a private tailnet. The
-app can continue listening only on `127.0.0.1`; Tailscale Serve provides an
-HTTPS address inside your tailnet. This does not expose the app to the public
-internet and does not use Funnel.
+Tailscale connects your Pi and your trusted devices to a private tailnet.
+Tailscale Serve provides an HTTPS address inside your tailnet. The app also
+listens on the Pi's LAN interfaces at port 8501, so devices on your home
+network can use `http://hansa.local:8501`. Serve does not use Funnel or expose
+the app to the public internet.
 
 ## Install and authenticate Tailscale on the Pi
 
@@ -29,8 +30,8 @@ sudo ./install-tailnet.sh
 
 The script configures background Serve for the app on `127.0.0.1:8501` and
 enables `tailscaled` at boot. If your app uses another port, pass it explicitly,
-for example `sudo ./install-tailnet.sh 5000` for a Flask service set to port
-5000 in `/etc/default/fun-embed-app`.
+for example `sudo ./install-tailnet.sh 8000` when the FastAPI service is set to
+port 8000 in `/etc/default/fun-embed-app`.
 
 ## Open the app
 

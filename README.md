@@ -48,12 +48,14 @@ network details before making the site public.
 
 ## Browse the guides
 
-Run the [Streamlit documentation browser](docs/README.md) to browse Markdown files under `docs/`. It discovers new Markdown files recursively.
+Run the React + FastAPI [documentation browser](docs/README.md) to browse
+Markdown files under `docs/`. It discovers new Markdown files recursively and
+uses a responsive layout for phones and laptops.
 
 
 ## Run the docs browser on a Pi
 
 See [Raspberry Pi environment setup](docs/rpi/environment_setup.md) for
-dependencies and the `uv` environment, then [Streamlit app on Raspberry Pi](docs/rpi/streamlit_app.md)
+dependencies and the `uv` environment, then [web app on Raspberry Pi](docs/rpi/web_app.md)
 for deployment and automatic startup. [Tailscale setup](docs/tailscale/README.md)
 explains private HTTPS access from a phone or laptop.

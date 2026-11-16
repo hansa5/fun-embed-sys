@@ -20,11 +20,8 @@ unit=/etc/systemd/system/fun-embed-app.service
 env_file=/etc/default/fun-embed-app
 if [[ ! -e "$env_file" ]]; then
   cat > "$env_file" <<'ENVVARS'
-APP_KIND=streamlit
-STREAMLIT_APP=docs/app.py
-HOST=127.0.0.1
+HOST=0.0.0.0
 PORT=8501
-FLASK_TARGET=app:app
 ENVVARS
 fi
 cat > "$unit" <<UNIT
