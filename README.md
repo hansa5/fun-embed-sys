@@ -46,16 +46,20 @@ network details before making the site public.
 - [GitHub setup for the laptop and Raspberry Pi](docs/github_setup.md) — SSH keys, GitHub CLI, and safe handling of personal access tokens.
 
 
-## Browse the guides
+## Stock analysis workspace
 
-Run the React + FastAPI [documentation browser](docs/README.md) to browse
-Markdown files under `docs/`. It discovers new Markdown files recursively and
-uses a responsive layout for phones and laptops.
+The React + FastAPI app includes a responsive stock analysis dashboard with
+popular ticker suggestions, historical price charts, company metrics,
+financial statements, dividend history, and explanations on hover. The
+guides are grouped under one Docs tab in the left sidebar. Read the
+[stock analysis guide](docs/trading/README.md) for chart, metric, and data-source
+notes.
 
 
 ## Run the docs browser on a Pi
 
 See [Raspberry Pi environment setup](docs/rpi/environment_setup.md) for
 dependencies and the `uv` environment, then [web app on Raspberry Pi](docs/rpi/web_app.md)
-for deployment and automatic startup. [Tailscale setup](docs/tailscale/README.md)
-explains private HTTPS access from a phone or laptop.
+for deployment and automatic startup. The app listens on the local network at
+`http://hansa.local:8501`. [Tailscale setup](docs/tailscale/README.md) explains
+private HTTPS access from a phone or laptop.

@@ -1,9 +1,10 @@
-# Run the React + FastAPI app on Saman
+# Run the stock analysis app on Saman
 
-The docs browser uses React for the browser interface and FastAPI for the
-document API. It reads Markdown files recursively from `docs/`. The layout
-adapts to phone and laptop widths, and internal Markdown links remain inside
-the browser.
+The app uses React for the responsive stock dashboard and FastAPI for market
+data and the Docs viewer. The dashboard includes historical charts, company
+metrics, annual and quarterly financial statements, and dividends. See the
+[stock analysis guide](../trading/README.md) for data-source and interpretation
+notes. The Docs tab reads Markdown files recursively from `docs/`.
 
 The server listens on `0.0.0.0:8501` by default, so devices on your local
 network can open <http://hansa.local:8501>. Use Tailscale for private access
