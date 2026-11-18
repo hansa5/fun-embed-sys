@@ -112,6 +112,29 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .company-identity p { margin: 4px 0 0; overflow: hidden; color: #758595; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .refresh-button { display: flex; align-items: center; gap: 7px; flex: none; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; color: #a1b0bb; background: rgba(255,255,255,.018); font-size: 10px; cursor: pointer; }
 .refresh-button:hover { color: var(--teal); border-color: rgba(131,222,192,.3); }
+.earnings-ribbon { display: flex; align-items: center; gap: 12px; margin: 0 0 13px; padding: 12px 15px; border: 1px solid rgba(131,222,192,.18); border-radius: 8px; color: #bfe7d6; background: linear-gradient(100deg, rgba(66,126,103,.12), rgba(20,31,39,.82)); }
+.earnings-ribbon.earnings-soon { border-color: rgba(226,185,112,.28); color: #e8d2a1; background: linear-gradient(100deg, rgba(166,121,48,.13), rgba(20,31,39,.82)); }
+.earnings-ribbon.earnings-unknown { border-color: var(--line); color: #aab8c1; background: rgba(255,255,255,.018); }
+.earnings-ribbon-icon { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 8px; color: currentColor; background: rgba(255,255,255,.055); font-size: 20px; }
+.earnings-ribbon > span:nth-child(2) { display: grid; gap: 4px; min-width: 0; }
+.earnings-ribbon b { font-size: 11px; font-weight: 620; }
+.earnings-ribbon small { color: #81928f; font-size: 9px; }
+.earnings-ribbon button { margin-left: auto; padding: 7px 9px; border: 1px solid rgba(181,213,199,.14); border-radius: 6px; color: #afc9bd; background: rgba(255,255,255,.025); font-size: 9px; white-space: nowrap; cursor: pointer; }
+.earnings-ribbon button:hover { color: #e1f4eb; border-color: rgba(131,222,192,.34); }
+.earnings-page .analysis-heading { margin-bottom: 20px; }
+.earnings-source-note { display: flex; align-items: center; gap: 8px; margin-bottom: 13px; color: #8e9aa1; font-size: 10px; line-height: 1.5; }
+.earnings-source-note svg { flex: none; color: #b9a477; }
+.earnings-table { overflow: hidden; }
+.earnings-table-head, .earnings-table-row { display: grid; grid-template-columns: minmax(220px, 1.5fr) minmax(150px, 1fr) minmax(100px, .6fr); align-items: center; gap: 18px; padding: 12px 18px; }
+.earnings-table-head { border-bottom: 1px solid var(--line); color: #768796; font: 8px var(--mono); letter-spacing: .8px; }
+.earnings-table-row { width: 100%; min-height: 61px; border: 0; border-bottom: 1px solid rgba(170,191,210,.07); color: #c8d3db; background: transparent; text-align: left; cursor: pointer; }
+.earnings-table-row:hover { background: rgba(131,222,192,.045); }
+.earnings-company { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 12px; }
+.earnings-company b { color: #bfe7d6; font: 600 11px var(--mono); }
+.earnings-company small { overflow: hidden; color: #99a7b1; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.earnings-date { color: #d5dfe4; font-size: 10px; }
+.earnings-countdown { color: #89cbb1; font: 10px var(--mono); }
+.earnings-table .panel-footnote { border-top: 1px solid rgba(170,191,210,.08); }
 .metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-bottom: 12px; }
 .metric-card { min-width: 0; padding: 12px 12px 11px; border: 1px solid var(--line); border-radius: 8px; background: linear-gradient(145deg, rgba(21,31,43,.86), rgba(15,22,31,.87)); }
 .metric-heading { display: flex; align-items: center; gap: 5px; min-height: 15px; color: #788897; font: 500 8px var(--mono); letter-spacing: .75px; white-space: nowrap; }
@@ -247,6 +270,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   .mobile-nav-toggle { display: grid; place-items: center; width: 33px; height: 33px; flex: none; padding: 0; border: 1px solid var(--line); border-radius: 8px; color: #b5c4cc; background: rgba(255,255,255,.035); cursor: pointer; }
   .topbar-right { gap: 6px; font-size: 7px; letter-spacing: .35px; }
   .analysis-page { padding: 23px 14px 30px; }
+  .workspace-main { min-width: 0; }
   .analysis-heading { align-items: flex-start; margin-bottom: 18px; }
   .analysis-heading h1 { margin-top: 7px; font-size: 26px; }
   .analysis-heading p { max-width: 280px; font-size: 11px; line-height: 1.5; }
@@ -256,6 +280,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   .ticker-search-wrap { width: 100%; }
   .toolbar-hint { display: none; }
   .company-header { margin-top: 5px; }
+  .earnings-ribbon { gap: 8px; padding: 10px; }
+  .earnings-ribbon button { padding: 7px; font-size: 8px; }
+  .earnings-page .analysis-heading { display: block; }
+  .earnings-page .market-status { margin-top: 11px; }
+  .earnings-table-head { display: none; }
+  .earnings-table-row { grid-template-columns: minmax(0, 1fr) auto; gap: 7px 10px; padding: 11px 12px; }
+  .earnings-company { grid-column: 1 / -1; grid-template-columns: 49px minmax(0, 1fr); gap: 7px; }
+  .earnings-company small, .earnings-date, .earnings-countdown { font-size: 9px; }
+  .earnings-date { grid-column: 1; grid-row: 2; }
+  .earnings-countdown { grid-column: 2; grid-row: 2; text-align: right; }
   .company-monogram { width: 36px; height: 36px; border-radius: 10px; }
   .company-name-line { gap: 6px; }
   .company-name-line h2 { max-width: min(57vw, 300px); font-size: 15px; }

@@ -90,11 +90,22 @@ function formatNumber(value) {
 
 function formatDate(value, includeTime = false) {
   if (!value) return '—'
-  const date = new Date(value)
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(value))
+    ? new Date(`${value}T00:00:00`)
+    : new Date(value)
   if (Number.isNaN(date.getTime())) return String(value)
   return new Intl.DateTimeFormat(undefined, includeTime
     ? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }
     : { year: 'numeric', month: 'short', day: 'numeric' }).format(date)
+}
+
+function daysUntil(value) {
+  if (!value) return null
+  const [year, month, day] = value.split('-').map(Number)
+  const target = Date.UTC(year, month - 1, day)
+  const today = new Date()
+  const start = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+  return Math.round((target - start) / 86400000)
 }
 
 function useDocuments() {
@@ -219,8 +230,9 @@ function formatFinancial(value, label, currency) {
 
 function App() {
   const docs = useDocuments()
-  const initialDoc = new URLSearchParams(window.location.search).get('doc') || ''
-  const [page, setPage] = useState(initialDoc ? 'docs' : 'analysis')
+  const initialQuery = new URLSearchParams(window.location.search)
+  const initialDoc = initialQuery.get('doc') || ''
+  const [page, setPage] = useState(initialDoc ? 'docs' : initialQuery.has('earnings') ? 'earnings' : 'analysis')
   const [docsExpanded, setDocsExpanded] = useState(Boolean(initialDoc))
   const [docPath, setDocPath] = useState(initialDoc || 'README.md')
   const [docSearch, setDocSearch] = useState('')
@@ -245,6 +257,8 @@ function App() {
   const [financialLoading, setFinancialLoading] = useState(true)
   const [dividends, setDividends] = useState([])
   const [dividendLoading, setDividendLoading] = useState(true)
+  const [earnings, setEarnings] = useState([])
+  const [earningsLoading, setEarningsLoading] = useState(true)
 
   const visibleDocs = useMemo(() => {
     const q = docSearch.trim().toLowerCase()
@@ -265,20 +279,43 @@ function App() {
   const showAnalysis = useCallback(() => {
     const query = new URLSearchParams(window.location.search)
     query.delete('doc')
+    query.delete('earnings')
     const suffix = query.toString() ? `?${query.toString()}` : ''
     window.history.pushState({}, '', `${window.location.pathname}${suffix}`)
     setPage('analysis')
     setSidebarOpen(false)
   }, [])
 
+  const showEarnings = useCallback(() => {
+    const query = new URLSearchParams(window.location.search)
+    query.delete('doc')
+    query.set('earnings', '1')
+    window.history.pushState({}, '', `${window.location.pathname}?${query.toString()}`)
+    setPage('earnings')
+    setSidebarOpen(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
   useEffect(() => {
     const onPopState = () => {
       const doc = new URLSearchParams(window.location.search).get('doc')
-      if (doc) { setDocPath(doc); setPage('docs'); setDocsExpanded(true) } else setPage('analysis')
+      const query = new URLSearchParams(window.location.search)
+      if (doc) { setDocPath(doc); setPage('docs'); setDocsExpanded(true) } else if (query.has('earnings')) setPage('earnings'); else setPage('analysis')
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setEarningsLoading(true)
+    fetch(`/api/market/earnings?symbols=${encodeURIComponent(symbol)}`)
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Earnings calendar unavailable.')))
+      .then((items) => { if (!cancelled) setEarnings(items) })
+      .catch(() => { if (!cancelled) setEarnings([]) })
+      .finally(() => { if (!cancelled) setEarningsLoading(false) })
+    return () => { cancelled = true }
+  }, [symbol, refreshCount])
 
   useEffect(() => {
     let cancelled = false
@@ -352,6 +389,8 @@ function App() {
   const currency = overview?.currency || 'USD'
   const companyName = overview?.name || symbol
   const dayTone = Number(overview?.change) >= 0 ? 'positive' : 'negative'
+  const nextEarnings = earnings.find((item) => item.symbol === symbol)
+  const earningsDays = daysUntil(nextEarnings?.date)
 
   return (
     <div className="terminal-shell">
@@ -364,6 +403,7 @@ function App() {
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="primary-nav" aria-label="Main navigation">
           <button className={`primary-nav-item ${page === 'analysis' ? 'selected' : ''}`} onClick={showAnalysis}><Icon name="chart" /><span>Stock Analysis</span></button>
+          <button className={`primary-nav-item ${page === 'earnings' ? 'selected' : ''}`} onClick={showEarnings}><Icon name="chart" /><span>Earnings calendar</span></button>
           <button className={`primary-nav-item ${page === 'docs' || docsExpanded ? 'docs-selected' : ''}`} aria-expanded={docsExpanded} onClick={() => setDocsExpanded((open) => !open)}><Icon name="book" /><span>Docs</span><span className={`nav-chevron ${docsExpanded ? 'rotated' : ''}`}><Icon name="chevron" size={15} /></span></button>
         </nav>
         {docsExpanded && <div className="docs-menu">
@@ -381,7 +421,7 @@ function App() {
       <main className="workspace-main">
         <header className="workspace-topbar">
           <button className="mobile-nav-toggle" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Icon name="menu" /></button>
-          <div className="topbar-title">{page === 'analysis' ? 'Market overview' : 'Documentation'}</div>
+          <div className="topbar-title">{page === 'analysis' ? 'Market overview' : page === 'earnings' ? 'Earnings calendar' : 'Documentation'}</div>
           <div className="topbar-right"><span className="market-dot" /> <span>DATA FEED · YAHOO FINANCE</span></div>
         </header>
 
@@ -415,6 +455,8 @@ function App() {
             <div className="company-identity"><div className="company-monogram">{symbol.slice(0, 1)}</div><div><div className="company-name-line"><h2>{companyName}</h2><span className="ticker-badge">{symbol}</span></div><p>{[overview?.exchange, overview?.sector, overview?.industry].filter(Boolean).join(' · ') || 'Company overview'}</p></div></div>
             <button className="refresh-button" onClick={() => setRefreshCount((count) => count + 1)} title="Refresh quote, chart, and reports"><Icon name="refresh" size={16} /><span>Refresh</span></button>
           </section>
+
+          {earningsLoading || nextEarnings?.date ? <div className={`earnings-ribbon ${earningsDays != null && earningsDays <= 7 ? 'earnings-soon' : ''}`}><span className="earnings-ribbon-icon">◷</span><span><b>{earningsDays === 0 ? 'Earnings call expected today' : earningsDays === 1 ? 'Earnings call expected tomorrow' : earningsDays != null ? `${earningsDays} days until next earnings call` : 'Next earnings call'}</b><small>{earningsLoading ? 'Checking the latest listed date…' : formatDate(nextEarnings?.date)} · Estimated date from Yahoo Finance</small></span><button onClick={showEarnings}>View calendar <span>↗</span></button></div> : <div className="earnings-ribbon earnings-unknown"><span className="earnings-ribbon-icon">◷</span><span><b>No upcoming earnings date listed</b><small>Yahoo Finance has not published a date for {symbol} yet.</small></span><button onClick={showEarnings}>View calendar <span>↗</span></button></div>}
 
           <section className="metrics-grid" aria-label="Company metrics">
             <MetricCard label="MARKET PRICE" value={overviewLoading ? '···' : formatPrice(overview?.price, currency)} note="Latest reported quote" help={METRIC_HELP.price} />
@@ -459,6 +501,19 @@ function App() {
           </section>
 
           <footer className="research-disclaimer"><span className="disclaimer-icon"><Icon name="info" size={16} /></span><p><strong>Learning tool, not investment advice.</strong> Prices and statements come from Yahoo Finance through yfinance, a community project. The feed can be delayed, incomplete, or unavailable; intraday bars begin at one minute and do not provide second-by-second quotes. For education and personal research only. <a href="?doc=trading%2FREADME.md" onClick={(event) => { event.preventDefault(); navigateToDoc('trading/README.md') }}>Read about the data and metrics <span>↗</span></a></p></footer>
+        </div> : page === 'earnings' ? <div className="analysis-page earnings-page">
+          <section className="analysis-heading"><div><div className="eyebrow">YOUR WATCHLIST <span>·</span> UPCOMING REPORTS</div><h1>Earnings calendar</h1><p>Upcoming earnings dates for major technology companies and your selected names.</p></div><div className="market-status"><span className="market-dot" /> SORTED BY DATE</div></section>
+          <div className="earnings-source-note"><Icon name="info" size={15} /> Dates are estimates from Yahoo Finance and can change. Company schedules are not always published in advance.</div>
+          <section className="earnings-table panel" aria-label="Upcoming earnings dates">
+            {earningsLoading ? <div className="table-loading"><span className="loader" />Loading earnings dates…</div> : earnings.length === 0 ? <div className="table-empty">Earnings dates could not be loaded. Try refreshing the stock page.</div> : <>
+              <div className="earnings-table-head"><span>COMPANY</span><span>EXPECTED DATE</span><span>COUNTDOWN</span></div>
+              {[...earnings].sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999') || a.symbol.localeCompare(b.symbol)).map((item) => {
+                const remaining = daysUntil(item.date)
+                return <button className="earnings-table-row" key={item.symbol} onClick={() => { setSymbol(item.symbol); setTickerInput(item.symbol); showAnalysis() }}><span className="earnings-company"><b>{item.symbol}</b><small>{item.name}</small></span><span className="earnings-date">{item.date ? formatDate(item.date) : 'Date not announced'}</span><span className="earnings-countdown">{remaining == null ? '—' : remaining === 0 ? 'Today' : remaining === 1 ? 'Tomorrow' : `${remaining} days`}</span></button>
+              })}
+            </>}
+            <div className="panel-footnote">Dates are sourced from the company earnings calendar provided by Yahoo Finance. Missing dates mean no upcoming date is currently listed.</div>
+          </section>
         </div> : <div className="docs-page"><DocReader documentPath={docPath} onNavigate={navigateToDoc} /></div>}
       </main>
     </div>

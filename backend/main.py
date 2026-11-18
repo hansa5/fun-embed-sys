@@ -50,6 +50,28 @@ POPULAR_STOCKS = [
     {"symbol": "QQQ", "name": "Invesco QQQ Trust"},
 ]
 
+EARNINGS_WATCHLIST = [
+    {"symbol": "AAPL", "name": "Apple Inc."},
+    {"symbol": "GOOGL", "name": "Alphabet Inc."},
+    {"symbol": "TSLA", "name": "Tesla, Inc."},
+    {"symbol": "NVDA", "name": "NVIDIA Corporation"},
+    {"symbol": "PGR", "name": "The Progressive Corporation"},
+    {"symbol": "QCOM", "name": "Qualcomm Incorporated"},
+    {"symbol": "MSFT", "name": "Microsoft Corporation"},
+    {"symbol": "META", "name": "Meta Platforms, Inc."},
+    {"symbol": "BAC", "name": "Bank of America Corporation"},
+    {"symbol": "AMZN", "name": "Amazon.com, Inc."},
+    {"symbol": "AVGO", "name": "Broadcom Inc."},
+    {"symbol": "ORCL", "name": "Oracle Corporation"},
+    {"symbol": "AMD", "name": "Advanced Micro Devices, Inc."},
+    {"symbol": "INTC", "name": "Intel Corporation"},
+    {"symbol": "NFLX", "name": "Netflix, Inc."},
+    {"symbol": "ADBE", "name": "Adobe Inc."},
+    {"symbol": "CRM", "name": "Salesforce, Inc."},
+    {"symbol": "IBM", "name": "International Business Machines"},
+    {"symbol": "TXN", "name": "Texas Instruments Incorporated"},
+]
+
 LOOKBACKS = {
     "1D": ("1d", ("1m", "5m", "15m", "30m", "1h")),
     "1W": ("5d", ("1m", "5m", "15m", "30m", "1h")),
@@ -167,6 +189,53 @@ def search_stocks(q: str = "") -> list[dict[str, str]]:
         if re.fullmatch(r"[A-Z0-9.-]{1,15}", direct) and not any(stock["symbol"] == direct for stock in matches):
             matches.insert(0, {"symbol": direct, "name": "Look up ticker"})
     return matches[:12]
+
+
+def _next_earnings_date(symbol: str) -> str | None:
+    """Return the next date in Yahoo Finance's calendar, if one is listed."""
+    calendar = yf.Ticker(symbol).calendar
+    if not calendar:
+        return None
+    dates = calendar.get("Earnings Date") if isinstance(calendar, dict) else None
+    if dates is None:
+        return None
+    if not isinstance(dates, (list, tuple)):
+        dates = [dates]
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    normalized = []
+    for value in dates:
+        try:
+            date = value.date() if hasattr(value, "date") else value
+            date_string = date.isoformat()[:10]
+            if date_string >= today:
+                normalized.append(date_string)
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return min(normalized) if normalized else None
+
+
+@app.get("/api/market/earnings")
+def earnings_calendar(symbols: str = "") -> list[dict[str, Any]]:
+    """List upcoming earnings dates for the curated watchlist and requested ticker."""
+    requested = [_symbol(value) for value in symbols.split(",") if value.strip()]
+    stocks = list(EARNINGS_WATCHLIST)
+    known = {stock["symbol"] for stock in stocks}
+    stocks.extend({"symbol": symbol, "name": symbol} for symbol in requested if symbol not in known)
+
+    def load() -> list[dict[str, Any]]:
+        results = []
+        for stock in stocks:
+            symbol = stock["symbol"]
+            try:
+                date = _next_earnings_date(symbol)
+            except Exception as error:
+                logger.info("Earnings calendar unavailable for %s: %s", symbol, error)
+                date = None
+            results.append({**stock, "date": date})
+        return results
+
+    # Keep refreshes bounded while avoiding a burst of Yahoo requests on every view.
+    return _cached(("earnings", tuple(stock["symbol"] for stock in stocks)), 21600, load)
 
 
 @app.get("/api/market/{symbol}/overview")
