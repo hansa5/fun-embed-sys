@@ -7,6 +7,8 @@ description: Develop Fun Embed Project directly in its Raspberry Pi checkout, pu
 
 Use this workflow when the requested Fun Embed changes are being made in the Pi's own checkout. Confirm the host, repository root, branch, and `origin` before changing files. The usual checkout on Saman (`Hansa.local`) is `/mnt/saman-ssd/git_repo/fun-embed-sys`; verify `/mnt/saman-ssd` is mounted from the PNY SSD before editing or installing. Do not assume the path if the current environment differs. The legacy SD-card checkout may remain at `~/Documents/git_repo/fun-embed-sys` as a rollback copy; do not use it as the deployed checkout.
 
+For the one-time move from the legacy SD checkout, read `docs/rpi/storage.md`. The user must explicitly approve erasing the identified partition. Do not pull the new app revision into the legacy checkout before migration because its database default changes. If SSH sudo requires an interactive password, do not ask for the password or try to work around it; provide the helper in the existing checkout and tell the user to run `sudo bash migrate-to-ssd.sh` in a Pi terminal.
+
 ## Edit and review
 
 1. Inspect `git status --short --branch`, the current branch, and `git remote -v`. Preserve unrelated user changes. Do not reset, clean, or overwrite them.

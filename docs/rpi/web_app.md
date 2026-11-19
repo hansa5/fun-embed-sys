@@ -22,6 +22,11 @@ The SSD-backed checkout for account `saman` is
 private SSH keys on the laptop. This public repository can be pulled over
 HTTPS without credentials.
 
+For the one-time move from the legacy SD checkout, see the migration helper
+in [Pi storage](storage.md). It must be run from a Pi terminal with sudo
+because formatting and `/etc/fstab` require an interactive administrator
+session.
+
 ```sh
 cd /mnt/saman-ssd/git_repo/fun-embed-sys
 git status --short --branch

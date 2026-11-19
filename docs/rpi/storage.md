@@ -10,12 +10,37 @@ as ext4 because its prior filesystem cannot reliably host this Linux app's
 environment and SQLite data. After migration, identify it by its new ext4 UUID
 with `lsblk -f`; do not rely on `/dev/sda` numbering.
 
+The migration has not run yet: `/dev/sda2` remains VFAT and unmounted until the
+helper is run interactively on the Pi.
+
 Mount the ext4 data partition persistently at `/mnt/saman-ssd`. The repository
 checkout is:
 
 ```text
 /mnt/saman-ssd/git_repo/fun-embed-sys
 ```
+
+## One-time migration
+
+The migration helper is `migrate-to-ssd.sh`. Run it from the existing SD
+checkout in a Pi terminal with `sudo bash migrate-to-ssd.sh`. Do not pull the
+new app revision into the old checkout first: its database default changes to
+`<repo>/data`, while the running legacy app still uses the existing home data
+file. The helper clones current `master` directly onto the SSD and copies the
+live database to it. It verifies the PNY device and expected old
+filesystem UUID, asks for the exact confirmation `ERASE SAMAN`, stops the
+existing user service, backs up the SQLite database to the SD card, formats
+only the approved data partition, adds its new UUID to `/etc/fstab`, clones
+the current GitHub branch to the SSD, builds the app, restores the database,
+updates the user service override, installs both Codex skills, restarts the
+app, and checks `/api/health`. The previous SD checkout and database remain as
+rollback copies. If a step fails, the helper attempts to restore the old
+service override and restart the SD app.
+
+The Pi requires an interactive sudo password for partition and system mount
+changes, so Codex cannot run this helper through the current non-interactive
+SSH channel. Do not paste your sudo password into chat; run the helper in a
+terminal on the Pi.
 
 The Pi boots from its 59 GB microSD (`/dev/mmcblk0p2`); this SSD hosts the app
 checkout and app data. Mount options, UUID, and the service dependency on the
