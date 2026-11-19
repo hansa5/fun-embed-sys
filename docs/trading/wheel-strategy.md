@@ -95,7 +95,7 @@ and authorization are implemented.
 
 ## SQLite location
 
-The database defaults to
-`~/.local/share/fun-embed-sys/wheel.sqlite3`. Set `FUN_EMBED_DB_PATH` to an
-absolute path to place it elsewhere. Raspberry Pi SSD inventory and the
-current unmounted VFAT partition are documented in [Pi storage](../rpi/storage.md).
+The database defaults to `data/wheel.sqlite3` under the repository root. On
+the Raspberry Pi, that is `/mnt/saman-ssd/git_repo/fun-embed-sys/data/wheel.sqlite3`.
+Set `FUN_EMBED_DB_PATH` to an absolute path to place it elsewhere. Raspberry
+Pi SSD and mount details are documented in [Pi storage](../rpi/storage.md).

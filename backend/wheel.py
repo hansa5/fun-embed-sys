@@ -19,8 +19,7 @@ def database_path() -> Path:
     configured = os.environ.get("FUN_EMBED_DB_PATH")
     if configured:
         return Path(configured).expanduser().resolve()
-    data_home = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")).expanduser()
-    return data_home / "fun-embed-sys" / "wheel.sqlite3"
+    return Path(__file__).resolve().parents[1] / "data" / "wheel.sqlite3"
 
 
 def _now() -> str:

@@ -17,12 +17,13 @@ when away from home; do not configure router port forwarding for this app.
 
 For Codex deployment workflows, see [Codex skills for Raspberry Pi](codex_skills.md).
 
-The checkout for account `saman` is `~/Documents/git_repo/fun-embed-sys`.
-Keep the laptop's GitHub token and private SSH keys on the laptop. This public
-repository can be pulled over HTTPS without credentials.
+The SSD-backed checkout for account `saman` is
+`/mnt/saman-ssd/git_repo/fun-embed-sys`. Keep the laptop's GitHub token and
+private SSH keys on the laptop. This public repository can be pulled over
+HTTPS without credentials.
 
 ```sh
-cd ~/Documents/git_repo/fun-embed-sys
+cd /mnt/saman-ssd/git_repo/fun-embed-sys
 git status --short --branch
 git pull --ff-only origin master
 ./install.sh
@@ -76,11 +77,11 @@ sync Python packages, then restart the service. If it does not respond, check
 the service and logs first; `curl http://127.0.0.1:8501/api/health` checks the
 backend independently of the browser.
 
-Wheel records default to `~/.local/share/fun-embed-sys/wheel.sqlite3` for the
-service account. Set `FUN_EMBED_DB_PATH` to an absolute path to move the
-database. Before configuring the database on the attached SSD, read the
-[Pi storage notes](storage.md): the identified `SAMAN` partition is currently
-unmounted and VFAT-formatted.
+Wheel records default to `data/wheel.sqlite3` under the repository root, which
+is `/mnt/saman-ssd/git_repo/fun-embed-sys/data/wheel.sqlite3` on the Pi. The
+`/data/` directory is excluded from Git. Set `FUN_EMBED_DB_PATH` only when you
+need a different location. Read the [Pi storage notes](storage.md) for the SSD
+mount and filesystem UUID.
 
 ## Add dependencies
 

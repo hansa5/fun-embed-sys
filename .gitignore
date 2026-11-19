@@ -135,5 +135,6 @@ dmypy.json
 # React frontend dependencies and generated build output
 frontend/node_modules/
 frontend/dist/
+/data/
 # Personal access token file; keep credentials out of Git
 /git_token

@@ -1,46 +1,43 @@
 # Raspberry Pi storage for app data
 
-## SSD inventory (checked 2026-11-18)
+## SSD inventory and app layout
 
 The Pi `Hansa.local` has a **PNY CS900 500 GB SSD** at `/dev/sda` (465.8 GiB
-reported by Linux). It has two partitions:
+reported by Linux). The EFI partition `/dev/sda1` (200 MB, VFAT, UUID
+`67E3-17ED`) is not used by the app. The former data partition `/dev/sda2`
+(465.6 GB, VFAT label `SAMAN`, UUID `9941-07F1`) was approved for formatting
+as ext4 because its prior filesystem cannot reliably host this Linux app's
+environment and SQLite data. After migration, identify it by its new ext4 UUID
+with `lsblk -f`; do not rely on `/dev/sda` numbering.
 
-| Partition | Size | Filesystem | Label | UUID | Mounted |
-| --- | ---: | --- | --- | --- | --- |
-| `/dev/sda1` | 200 MB | VFAT | `EFI` | `67E3-17ED` | No |
-| `/dev/sda2` | 465.6 GB | VFAT | `SAMAN` | `9941-07F1` | No |
-
-Neither partition appears in `/etc/fstab`; the Pi currently boots and runs the
-app from its 59 GB microSD (`/dev/mmcblk0p2`). The SSD was identified
-read-only. It was not mounted, changed, or formatted during setup.
-
-## SQLite wheel database
-
-Wheel-cycle records use SQLite and default to:
+Mount the ext4 data partition persistently at `/mnt/saman-ssd`. The repository
+checkout is:
 
 ```text
-~/.local/share/fun-embed-sys/wheel.sqlite3
+/mnt/saman-ssd/git_repo/fun-embed-sys
 ```
 
-Set `FUN_EMBED_DB_PATH` to an absolute path to use another filesystem. The
-identified `SAMAN` partition is VFAT and currently unmounted. Before placing a
-long-lived SQLite database there, inspect any existing contents and choose a
-Linux filesystem and mount configuration that provide reliable locking and
-durable writes. Ext4 is the preferred Linux filesystem for this database.
-Reformatting `/dev/sda2` would erase its contents and requires explicit
-approval; no formatting or mount changes are included in the app feature.
+The Pi boots from its 59 GB microSD (`/dev/mmcblk0p2`); this SSD hosts the app
+checkout and app data. Mount options, UUID, and the service dependency on the
+mount are recorded in `/etc/fstab` and the user service override after setup.
 
-After the SSD has been safely prepared and persistently mounted (for example
-at `/mnt/saman-ssd`), set the application environment to:
+## SQLite wheel database location
+
+Wheel-cycle records use SQLite and default to a `data` directory at the root of
+the repository:
 
 ```text
-FUN_EMBED_DB_PATH=/mnt/saman-ssd/fun-embed/wheel.sqlite3
+/mnt/saman-ssd/git_repo/fun-embed-sys/data/wheel.sqlite3
 ```
 
-The service account must be able to create and write the database directory.
-Keep the Pi running one app process for this SQLite file; do not place the file
-on a network share or open it directly from another device. Back up the
-database file while the app is stopped, or use SQLite's online backup support.
+The default follows the repository root on both the Pi and development
+machines. `FUN_EMBED_DB_PATH` can override it with an absolute path. The
+`/data/` directory is ignored by Git so the private database and backups are
+never committed.
+
+Keep the Pi running one app process for this SQLite file; do not place it on a
+network share or open it directly from another device. Back up the database
+with the app stopped or use SQLite's online backup support.
 
 ## Re-check storage
 
@@ -53,6 +50,6 @@ findmnt
 df -hT
 ```
 
-The current partitions have VFAT UUIDs rather than ext4 UUIDs. Verify the
-device, filesystem, and existing contents before changing the partition or
-editing `/etc/fstab`.
+Verify the device, filesystem UUID, and mount before changing `/etc/fstab` or
+moving the checkout. The ext4 filesystem UUID differs from the previous VFAT
+UUID `9941-07F1`.
