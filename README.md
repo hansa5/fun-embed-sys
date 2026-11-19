@@ -50,10 +50,12 @@ network details before making the site public.
 
 The React + FastAPI app includes a responsive stock analysis dashboard with
 popular ticker suggestions, historical price charts, company metrics,
-financial statements, dividend history, and explanations on hover. The
-guides are grouped under one Docs tab in the left sidebar. Read the
-[stock analysis guide](docs/trading/README.md) for chart, metric, and data-source
-notes.
+financial statements, dividend history, an earnings calendar, and a SQLite-
+backed Wheel Strategy tracker with explicit state changes and configurable
+alerts. The strategy tracker does not place orders or connect to a brokerage.
+The guides are grouped under one Docs tab in the left sidebar. Read the
+[stock analysis guide](docs/trading/README.md), [Wheel Strategy guide](docs/trading/wheel-strategy.md),
+and [Pi storage notes](docs/rpi/storage.md) for details.
 
 
 ## Run the docs browser on a Pi

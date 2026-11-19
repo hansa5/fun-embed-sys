@@ -1,16 +1,21 @@
 # Run the stock analysis app on Saman
 
 The app uses React for the responsive stock dashboard and FastAPI for market
-data and the Docs viewer. The dashboard includes historical charts, company
-metrics, annual and quarterly financial statements, and dividends. See the
+data, earnings dates, options, and the Docs viewer. The dashboard includes
+historical charts, company metrics, financial statements, dividends, and an
+SQLite-backed Wheel Strategy tracker. See the
 [stock analysis guide](../trading/README.md) for data-source and interpretation
-notes. The Docs tab reads Markdown files recursively from `docs/`.
+notes and the [Wheel Strategy guide](../trading/wheel-strategy.md) for state
+transitions and alert behavior. The Docs tab reads Markdown files recursively
+from `docs/`.
 
 The server listens on `0.0.0.0:8501` by default, so devices on your local
 network can open <http://hansa.local:8501>. Use Tailscale for private access
 when away from home; do not configure router port forwarding for this app.
 
 ## Install or update on the Pi
+
+For Codex deployment workflows, see [Codex skills for Raspberry Pi](codex_skills.md).
 
 The checkout for account `saman` is `~/Documents/git_repo/fun-embed-sys`.
 Keep the laptop's GitHub token and private SSH keys on the laptop. This public
@@ -70,6 +75,12 @@ After pulling code changes, run `./install.sh` to rebuild the frontend and
 sync Python packages, then restart the service. If it does not respond, check
 the service and logs first; `curl http://127.0.0.1:8501/api/health` checks the
 backend independently of the browser.
+
+Wheel records default to `~/.local/share/fun-embed-sys/wheel.sqlite3` for the
+service account. Set `FUN_EMBED_DB_PATH` to an absolute path to move the
+database. Before configuring the database on the attached SSD, read the
+[Pi storage notes](storage.md): the identified `SAMAN` partition is currently
+unmounted and VFAT-formatted.
 
 ## Add dependencies
 

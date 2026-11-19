@@ -7,12 +7,14 @@ from pathlib import Path
 import re
 import threading
 import time
+from datetime import date
 from typing import Any, Callable
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import yfinance as yf
+from backend import wheel
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS_ROOT = (REPO_ROOT / "docs").resolve()
@@ -236,6 +238,187 @@ def earnings_calendar(symbols: str = "") -> list[dict[str, Any]]:
 
     # Keep refreshes bounded while avoiding a burst of Yahoo requests on every view.
     return _cached(("earnings", tuple(stock["symbol"] for stock in stocks)), 21600, load)
+
+
+def _option_contracts(frame: Any) -> list[dict[str, Any]]:
+    if frame is None or getattr(frame, "empty", True):
+        return []
+    contracts = []
+    for _, row in frame.iterrows():
+        bid = _number(row.get("bid"))
+        ask = _number(row.get("ask"))
+        contracts.append({
+            "contractSymbol": str(row.get("contractSymbol") or ""),
+            "strike": _number(row.get("strike")),
+            "bid": bid,
+            "ask": ask,
+            "mark": (bid + ask) / 2 if bid is not None and ask is not None and bid > 0 and ask > 0 else _number(row.get("lastPrice")),
+            "lastPrice": _number(row.get("lastPrice")),
+            "impliedVolatility": _number(row.get("impliedVolatility")),
+            "volume": _number(row.get("volume")),
+            "openInterest": _number(row.get("openInterest")),
+        })
+    return [contract for contract in contracts if contract["strike"] is not None]
+
+
+@app.get("/api/options/{symbol}")
+def option_chain(symbol: str, expiration: str = "") -> dict[str, Any]:
+    symbol = _symbol(symbol)
+
+    def load() -> dict[str, Any]:
+        ticker = yf.Ticker(symbol)
+        expirations = list(ticker.options or ())
+        if expiration and expiration not in expirations:
+            raise HTTPException(status_code=422, detail="Choose an expiration returned by the options data source.")
+        selected = expiration or (expirations[0] if expirations else "")
+        calls: list[dict[str, Any]] = []
+        puts: list[dict[str, Any]] = []
+        if selected:
+            chain = ticker.option_chain(selected)
+            calls = _option_contracts(chain.calls)
+            puts = _option_contracts(chain.puts)
+        try:
+            fast_info = dict(ticker.fast_info)
+        except Exception:
+            fast_info = {}
+        price = _number(_safe_dict_get(fast_info, "last_price"))
+        if price is None:
+            history = ticker.history(period="1d", interval="1m", auto_adjust=False)
+            if history is not None and not history.empty:
+                price = _number(history["Close"].dropna().iloc[-1])
+        return {"symbol": symbol, "underlyingPrice": price, "expirations": expirations, "expiration": selected or None,
+                "calls": calls, "puts": puts, "source": "Yahoo Finance via yfinance"}
+
+    try:
+        return _cached(("options", symbol, expiration), 90, load)
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("Options data request failed for %s", symbol)
+        raise HTTPException(status_code=502, detail="Options data is unavailable from the market data source.") from error
+
+
+@app.get("/api/wheel")
+def list_wheel_cycles() -> list[dict[str, Any]]:
+    try:
+        return wheel.list_cycles()
+    except Exception as error:
+        logger.exception("Wheel database could not be read")
+        raise HTTPException(status_code=503, detail="Wheel tracking storage is unavailable.") from error
+
+
+@app.post("/api/wheel")
+def create_wheel_cycle(payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return wheel.create_cycle(payload, _symbol(str(payload.get("symbol", ""))))
+    except wheel.WheelError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except Exception as error:
+        logger.exception("Wheel cycle could not be created")
+        raise HTTPException(status_code=503, detail="Wheel tracking storage is unavailable.") from error
+
+
+@app.get("/api/wheel/{cycle_id}")
+def get_wheel_cycle(cycle_id: str) -> dict[str, Any]:
+    try:
+        return wheel.get_cycle(cycle_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except Exception as error:
+        logger.exception("Wheel cycle could not be read")
+        raise HTTPException(status_code=503, detail="Wheel tracking storage is unavailable.") from error
+
+
+@app.post("/api/wheel/{cycle_id}/actions/{action}")
+def update_wheel_cycle(cycle_id: str, action: str, payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return wheel.transition(cycle_id, action, payload)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except wheel.WheelError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except Exception as error:
+        logger.exception("Wheel cycle could not be updated")
+        raise HTTPException(status_code=503, detail="Wheel tracking storage is unavailable.") from error
+
+
+@app.get("/api/wheel/{cycle_id}/analysis")
+def analyze_wheel_cycle(cycle_id: str) -> dict[str, Any]:
+    try:
+        cycle = wheel.get_cycle(cycle_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    leg = cycle["activeLeg"]
+    if not leg:
+        return {"cycleId": cycle_id, "state": cycle["state"], "alerts": [], "marketAvailable": False}
+    try:
+        ticker = yf.Ticker(cycle["symbol"])
+        try:
+            fast_info = dict(ticker.fast_info)
+        except Exception:
+            fast_info = {}
+        underlying = _number(_safe_dict_get(fast_info, "last_price"))
+        if underlying is None:
+            history = ticker.history(period="1d", interval="1m", auto_adjust=False)
+            if history is not None and not history.empty:
+                underlying = _number(history["Close"].dropna().iloc[-1])
+        chain = ticker.option_chain(leg["expiration"])
+        frame = chain.puts if leg["type"] == "PUT" else chain.calls
+        matches = frame[frame["strike"].sub(leg["strike"]).abs() < 0.001] if frame is not None and not frame.empty else None
+        quote: dict[str, Any] | None = None
+        if matches is not None and not matches.empty:
+            quote = _option_contracts(matches).pop(0)
+        mark = quote.get("mark") if quote else None
+        days = (date.fromisoformat(leg["expiration"]) - date.today()).days
+        contracts = leg["contracts"]
+        premium = leg["premium"]
+        quantity = contracts * 100
+        unrealized = (premium - mark) * quantity if mark is not None else None
+        captured = ((premium - mark) / premium * 100) if mark is not None and premium > 0 else None
+        alerts = []
+        if underlying is not None:
+            if leg["type"] == "PUT":
+                if underlying < leg["strike"]:
+                    alerts.append({"level": "watch", "code": "put_itm", "message": "Underlying is below the put strike; assignment is possible."})
+                breakeven = leg["strike"] - premium
+                if underlying <= breakeven:
+                    alerts.append({"level": "risk", "code": "put_breakeven", "message": "Underlying is at or below the put break-even at expiration."})
+            else:
+                basis = cycle["shareCostBasis"]
+                breakeven = (basis - premium) if basis is not None else None
+                if underlying > leg["strike"]:
+                    alerts.append({"level": "watch", "code": "call_itm", "message": "Underlying is above the call strike; covered shares may be called away."})
+                if basis is not None and underlying < basis:
+                    alerts.append({"level": "watch", "code": "below_cost_basis", "message": "Underlying is below the recorded share cost basis."})
+        else:
+            basis = cycle["shareCostBasis"]
+            breakeven = leg["strike"] - premium if leg["type"] == "PUT" else ((basis - premium) if basis is not None else None)
+        assignment_pnl = None
+        if leg["type"] == "CALL" and cycle["shareCostBasis"] is not None:
+            assignment_pnl = (leg["strike"] + premium - cycle["shareCostBasis"]) * quantity
+        if cycle["takeProfitPercent"] is not None and captured is not None and captured >= cycle["takeProfitPercent"]:
+            alerts.append({"level": "action", "code": "take_profit", "message": f"Configured premium-capture alert reached ({captured:.0f}% captured)."})
+        if cycle["maxLossDollars"] is not None and unrealized is not None and unrealized <= -cycle["maxLossDollars"]:
+            alerts.append({"level": "risk", "code": "max_loss", "message": "Configured loss threshold reached based on the current option mark."})
+        if days <= cycle["expiryAlertDays"]:
+            alerts.append({"level": "watch", "code": "expiration_soon", "message": f"{days} days remain to expiration; confirm the broker's expiration and assignment outcome."})
+        if not quote:
+            alerts.append({"level": "info", "code": "quote_unavailable", "message": "No matching option quote is available; automatic premium alerts are paused."})
+        next_states = ("PUT_CASH_READY after OTM expiry or closing; SHARES_HELD if assigned" if leg["type"] == "PUT"
+                       else "SHARES_HELD after OTM expiry or closing; PUT_CASH_READY if all covered shares are assigned")
+        return {"cycleId": cycle_id, "state": cycle["state"], "underlyingPrice": underlying,
+                "optionMark": mark, "bid": quote.get("bid") if quote else None,
+                "ask": quote.get("ask") if quote else None, "unrealizedPnl": unrealized,
+                "premiumCapturedPercent": captured, "breakEvenAtExpiration": breakeven,
+                "coveredCallAssignmentPnl": assignment_pnl,
+                "daysToExpiration": days, "nextScenarios": next_states, "alerts": alerts,
+                "marketAvailable": underlying is not None and quote is not None,
+                "dataSource": "Yahoo Finance via yfinance; quotes may be delayed or unavailable"}
+    except Exception as error:
+        logger.info("Wheel analysis unavailable for %s: %s", cycle["symbol"], error)
+        return {"cycleId": cycle_id, "state": cycle["state"], "alerts": [
+            {"level": "info", "code": "market_unavailable", "message": "Current option analysis is unavailable. Recorded trades remain safe in SQLite."}
+        ], "marketAvailable": False}
 
 
 @app.get("/api/market/{symbol}/overview")

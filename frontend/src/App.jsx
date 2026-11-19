@@ -6,6 +6,7 @@ import { DataZoomComponent, GridComponent, TooltipComponent } from 'echarts/comp
 import { CanvasRenderer } from 'echarts/renderers'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import WheelStrategy from './WheelStrategy.jsx'
 
 echarts.use([BarChart, CandlestickChart, DataZoomComponent, GridComponent, TooltipComponent, CanvasRenderer])
 
@@ -232,7 +233,7 @@ function App() {
   const docs = useDocuments()
   const initialQuery = new URLSearchParams(window.location.search)
   const initialDoc = initialQuery.get('doc') || ''
-  const [page, setPage] = useState(initialDoc ? 'docs' : initialQuery.has('earnings') ? 'earnings' : 'analysis')
+  const [page, setPage] = useState(initialDoc ? 'docs' : initialQuery.has('wheel') ? 'wheel' : initialQuery.has('earnings') ? 'earnings' : 'analysis')
   const [docsExpanded, setDocsExpanded] = useState(Boolean(initialDoc))
   const [docPath, setDocPath] = useState(initialDoc || 'README.md')
   const [docSearch, setDocSearch] = useState('')
@@ -280,6 +281,7 @@ function App() {
     const query = new URLSearchParams(window.location.search)
     query.delete('doc')
     query.delete('earnings')
+    query.delete('wheel')
     const suffix = query.toString() ? `?${query.toString()}` : ''
     window.history.pushState({}, '', `${window.location.pathname}${suffix}`)
     setPage('analysis')
@@ -289,9 +291,21 @@ function App() {
   const showEarnings = useCallback(() => {
     const query = new URLSearchParams(window.location.search)
     query.delete('doc')
+    query.delete('wheel')
     query.set('earnings', '1')
     window.history.pushState({}, '', `${window.location.pathname}?${query.toString()}`)
     setPage('earnings')
+    setSidebarOpen(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  const showWheel = useCallback(() => {
+    const query = new URLSearchParams(window.location.search)
+    query.delete('doc')
+    query.delete('earnings')
+    query.set('wheel', '1')
+    window.history.pushState({}, '', `${window.location.pathname}?${query.toString()}`)
+    setPage('wheel')
     setSidebarOpen(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
@@ -300,7 +314,7 @@ function App() {
     const onPopState = () => {
       const doc = new URLSearchParams(window.location.search).get('doc')
       const query = new URLSearchParams(window.location.search)
-      if (doc) { setDocPath(doc); setPage('docs'); setDocsExpanded(true) } else if (query.has('earnings')) setPage('earnings'); else setPage('analysis')
+      if (doc) { setDocPath(doc); setPage('docs'); setDocsExpanded(true) } else if (query.has('wheel')) setPage('wheel'); else if (query.has('earnings')) setPage('earnings'); else setPage('analysis')
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
@@ -308,6 +322,7 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
+    if (page !== 'earnings' && page !== 'analysis') return () => { cancelled = true }
     setEarningsLoading(true)
     fetch(`/api/market/earnings?symbols=${encodeURIComponent(symbol)}`)
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('Earnings calendar unavailable.')))
@@ -315,7 +330,7 @@ function App() {
       .catch(() => { if (!cancelled) setEarnings([]) })
       .finally(() => { if (!cancelled) setEarningsLoading(false) })
     return () => { cancelled = true }
-  }, [symbol, refreshCount])
+  }, [symbol, refreshCount, page])
 
   useEffect(() => {
     let cancelled = false
@@ -330,6 +345,7 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
+    if (page !== 'analysis') return () => { cancelled = true }
     setOverviewLoading(true)
     setMarketError('')
     fetch(`/api/market/${encodeURIComponent(symbol)}/overview`)
@@ -338,10 +354,11 @@ function App() {
       .catch((error) => { if (!cancelled) { setOverview(null); setMarketError(error.message) } })
       .finally(() => { if (!cancelled) setOverviewLoading(false) })
     return () => { cancelled = true }
-  }, [symbol, refreshCount])
+  }, [symbol, refreshCount, page])
 
   useEffect(() => {
     let cancelled = false
+    if (page !== 'analysis') return () => { cancelled = true }
     setHistoryLoading(true)
     setHistoryError('')
     fetch(`/api/market/${encodeURIComponent(symbol)}/history?lookback=${lookback}&interval=${interval}`)
@@ -350,10 +367,11 @@ function App() {
       .catch((error) => { if (!cancelled) { setBars([]); setHistoryError(error.message) } })
       .finally(() => { if (!cancelled) setHistoryLoading(false) })
     return () => { cancelled = true }
-  }, [symbol, lookback, interval, refreshCount])
+  }, [symbol, lookback, interval, refreshCount, page])
 
   useEffect(() => {
     let cancelled = false
+    if (page !== 'analysis') return () => { cancelled = true }
     setFinancialLoading(true)
     fetch(`/api/market/${encodeURIComponent(symbol)}/financials?statement=${statement}&frequency=${frequency}`)
       .then(async (response) => { const result = await response.json(); if (!response.ok) throw new Error(result.detail || 'Financial report unavailable.'); return result })
@@ -361,10 +379,11 @@ function App() {
       .catch(() => { if (!cancelled) setFinancials({ periods: [], rows: [] }) })
       .finally(() => { if (!cancelled) setFinancialLoading(false) })
     return () => { cancelled = true }
-  }, [symbol, statement, frequency, refreshCount])
+  }, [symbol, statement, frequency, refreshCount, page])
 
   useEffect(() => {
     let cancelled = false
+    if (page !== 'analysis') return () => { cancelled = true }
     setDividendLoading(true)
     fetch(`/api/market/${encodeURIComponent(symbol)}/dividends`)
       .then(async (response) => { const result = await response.json(); if (!response.ok) throw new Error(result.detail || 'Dividend history unavailable.'); return result })
@@ -372,7 +391,7 @@ function App() {
       .catch(() => { if (!cancelled) setDividends([]) })
       .finally(() => { if (!cancelled) setDividendLoading(false) })
     return () => { cancelled = true }
-  }, [symbol, refreshCount])
+  }, [symbol, refreshCount, page])
 
   function selectStock(item) {
     setSymbol(item.symbol)
@@ -404,6 +423,7 @@ function App() {
         <nav className="primary-nav" aria-label="Main navigation">
           <button className={`primary-nav-item ${page === 'analysis' ? 'selected' : ''}`} onClick={showAnalysis}><Icon name="chart" /><span>Stock Analysis</span></button>
           <button className={`primary-nav-item ${page === 'earnings' ? 'selected' : ''}`} onClick={showEarnings}><Icon name="chart" /><span>Earnings calendar</span></button>
+          <button className={`primary-nav-item ${page === 'wheel' ? 'selected' : ''}`} onClick={showWheel}><Icon name="chart" /><span>Wheel strategy</span></button>
           <button className={`primary-nav-item ${page === 'docs' || docsExpanded ? 'docs-selected' : ''}`} aria-expanded={docsExpanded} onClick={() => setDocsExpanded((open) => !open)}><Icon name="book" /><span>Docs</span><span className={`nav-chevron ${docsExpanded ? 'rotated' : ''}`}><Icon name="chevron" size={15} /></span></button>
         </nav>
         {docsExpanded && <div className="docs-menu">
@@ -421,11 +441,11 @@ function App() {
       <main className="workspace-main">
         <header className="workspace-topbar">
           <button className="mobile-nav-toggle" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Icon name="menu" /></button>
-          <div className="topbar-title">{page === 'analysis' ? 'Market overview' : page === 'earnings' ? 'Earnings calendar' : 'Documentation'}</div>
+          <div className="topbar-title">{page === 'analysis' ? 'Market overview' : page === 'earnings' ? 'Earnings calendar' : page === 'wheel' ? 'Wheel strategy' : 'Documentation'}</div>
           <div className="topbar-right"><span className="market-dot" /> <span>DATA FEED · YAHOO FINANCE</span></div>
         </header>
 
-        {page === 'analysis' ? <div className="analysis-page">
+        {page === 'wheel' ? <WheelStrategy /> : page === 'analysis' ? <div className="analysis-page">
           <section className="analysis-heading">
             <div><div className="eyebrow">YOUR MARKET WORKSPACE <span>·</span> LEARN AS YOU EXPLORE</div><h1>Stock analysis</h1><p>Explore price history, company metrics, and reported financials.</p></div>
             <div className="market-status"><span className="market-dot" /> PERSONAL RESEARCH DATA</div>
