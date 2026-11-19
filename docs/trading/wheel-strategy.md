@@ -33,6 +33,14 @@ money does not prove that the broker assigned it. A short call may cover only
 some of the shares; the remaining shares stay in `SHARES_HELD`. A cycle can be
 closed only when it has no open option and no recorded shares.
 
+The page shows the current state in green in an interactive state diagram.
+Choose a reachable state or a transition card to review the destination,
+trade-specific estimates, and required inputs before recording the move. The
+ticker selector includes the target list (including Amazon and Bank of
+America); custom tickers can be added to that browser's local target list.
+Cycles can be deleted from the list after a confirmation prompt. Deleting a
+cycle permanently removes its option legs and event history from SQLite.
+
 ## Record a cycle
 
 Start with a cash-secured put by choosing the symbol, expiration, strike,

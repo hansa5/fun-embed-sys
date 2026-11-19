@@ -238,6 +238,13 @@ def get_cycle(cycle_id: str) -> dict[str, Any]:
         return _cycle_dict(connection, row, with_events=True)
 
 
+def delete_cycle(cycle_id: str) -> None:
+    """Remove one cycle and its event/leg history when the user deletes it."""
+    with _connect() as connection:
+        _cycle_row(connection, cycle_id)
+        connection.execute("DELETE FROM wheel_cycles WHERE id = ?", (cycle_id,))
+
+
 def transition(cycle_id: str, action: str, payload: dict[str, Any]) -> dict[str, Any]:
     now = _now()
     with _connect() as connection:

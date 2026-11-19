@@ -329,6 +329,17 @@ def get_wheel_cycle(cycle_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail="Wheel tracking storage is unavailable.") from error
 
 
+@app.delete("/api/wheel/{cycle_id}", status_code=204)
+def delete_wheel_cycle(cycle_id: str) -> None:
+    try:
+        wheel.delete_cycle(cycle_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except Exception as error:
+        logger.exception("Wheel cycle could not be deleted")
+        raise HTTPException(status_code=503, detail="Wheel tracking storage is unavailable.") from error
+
+
 @app.post("/api/wheel/{cycle_id}/actions/{action}")
 def update_wheel_cycle(cycle_id: str, action: str, payload: dict[str, Any]) -> dict[str, Any]:
     try:
