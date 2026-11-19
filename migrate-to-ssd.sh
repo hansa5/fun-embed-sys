@@ -86,8 +86,17 @@ else
   exit 1
 fi
 
-if findmnt -rn -S "$DEVICE" >/dev/null; then
-  echo "The SSD partition is already mounted. Stop and inspect its mount before continuing." >&2
+MOUNTED_AT="$(findmnt -rn -S "$DEVICE" -o TARGET || true)"
+if [[ -n $MOUNTED_AT && $MOUNTED_AT != "$MOUNT_POINT" ]]; then
+  echo "The SSD partition is mounted at '$MOUNTED_AT', not $MOUNT_POINT; stopping." >&2
+  exit 1
+fi
+if [[ -n $MOUNTED_AT && "$(findmnt -n -o FSTYPE --target "$MOUNTED_AT")" != ext4 ]]; then
+  echo "The mounted SSD is not ext4; stopping." >&2
+  exit 1
+fi
+if [[ -z $MOUNTED_AT ]] && findmnt -rn -M "$MOUNT_POINT" >/dev/null; then
+  echo "Another filesystem is mounted at $MOUNT_POINT; stopping." >&2
   exit 1
 fi
 parent="$(lsblk -no PKNAME "$DEVICE" | xargs)"
@@ -95,12 +104,22 @@ model="$(lsblk -dn -o MODEL "/dev/$parent" | xargs)"
 [[ $model == *"PNY CS900"* ]] || { echo "Expected the PNY CS900 SSD; detected '$model'. Stopping." >&2; exit 1; }
 
 mkdir -p "$MOUNT_POINT"
-if find "$MOUNT_POINT" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
+if [[ -z $MOUNTED_AT ]] && find "$MOUNT_POINT" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
   echo "$MOUNT_POINT is not empty and is not mounted; stopping to avoid masking data." >&2
   exit 1
 fi
-if grep -qE '[[:space:]]/mnt/saman-ssd[[:space:]]' /etc/fstab; then
-  echo "/etc/fstab already has an entry for $MOUNT_POINT; inspect it before continuing." >&2
+if [[ -n $MOUNTED_AT ]] && find "$MOUNT_POINT" -mindepth 1 -maxdepth 1 ! -name lost+found ! -name git_repo -print -quit | grep -q .; then
+  echo "$MOUNT_POINT contains unexpected files; stopping without changing them." >&2
+  exit 1
+fi
+if [[ -L "$MOUNT_POINT/git_repo" || ( -e "$MOUNT_POINT/git_repo" && ! -d "$MOUNT_POINT/git_repo" ) ]]; then
+  echo "$MOUNT_POINT/git_repo exists but is not a normal directory; stopping." >&2
+  exit 1
+fi
+expected_fstab_source="UUID=$(blkid -o value -s UUID "$DEVICE")"
+fstab_entry="$(awk -v target="$MOUNT_POINT" '$2 == target { print $1 "|" $3 }' /etc/fstab)"
+if [[ -n $fstab_entry && $fstab_entry != "$expected_fstab_source|ext4" ]]; then
+  echo "An unexpected /etc/fstab entry exists for $MOUNT_POINT; stopping." >&2
   exit 1
 fi
 
@@ -124,13 +143,20 @@ fi
 new_uuid="$(blkid -o value -s UUID "$DEVICE")"
 [[ -n $new_uuid ]] || { echo "Could not read the new ext4 UUID." >&2; exit 1; }
 
-cp -a /etc/fstab "$FSTAB_BACKUP"
-printf 'UUID=%s %s ext4 defaults,noatime,nofail,x-systemd.device-timeout=10s 0 2\n' "$new_uuid" "$MOUNT_POINT" >> /etc/fstab
-mount "$MOUNT_POINT"
+if [[ -z $fstab_entry ]]; then
+  cp -a /etc/fstab "$FSTAB_BACKUP"
+  printf 'UUID=%s %s ext4 defaults,noatime,nofail,x-systemd.device-timeout=10s 0 2\n' "$new_uuid" "$MOUNT_POINT" >> /etc/fstab
+fi
+if [[ -z $MOUNTED_AT ]]; then mount "$MOUNT_POINT"; fi
 [[ "$(findmnt -n -o FSTYPE --target "$MOUNT_POINT")" == ext4 ]] || { echo "The SSD did not mount as ext4." >&2; exit 1; }
 chown "$APP_USER:$APP_USER" "$MOUNT_POINT"
 
 mkdir -p "$MOUNT_POINT/git_repo"
+if [[ -n "$(find "$MOUNT_POINT/git_repo" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+  echo "$MOUNT_POINT/git_repo is not empty; stopping without changing its contents." >&2
+  exit 1
+fi
+chown "$APP_USER:$APP_USER" "$MOUNT_POINT/git_repo"
 as_saman git clone --branch master "$EXPECTED_REMOTE" "$NEW_REPO"
 [[ "$(git -C "$NEW_REPO" remote get-url origin)" == "$EXPECTED_REMOTE" ]] || { echo "Unexpected origin in SSD checkout." >&2; exit 1; }
 as_saman env HOME="$APP_HOME" PATH="$APP_HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" \
