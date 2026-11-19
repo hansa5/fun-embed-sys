@@ -4,6 +4,10 @@ This page explains the charts and company figures in the Stock Analysis view.
 It is a learning aid for reading public company data, not a recommendation to
 buy or sell a security.
 
+For strike distance, volatility comparisons, and plain-language option Greek
+definitions, see [Options research: strikes, expirations, volatility, and
+Greeks](options-greeks-and-strikes.md).
+
 ## Find a company
 
 Use the ticker search field to choose a popular symbol or enter another ticker

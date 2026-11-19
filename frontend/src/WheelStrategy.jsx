@@ -150,7 +150,7 @@ function ContractPicker({ symbol, type, onValues, compact = false }) {
   </div>
 }
 
-function WheelStrategy() {
+function WheelStrategy({ onAnalyzeOptions }) {
   const [cycles, setCycles] = useState([])
   const [analysis, setAnalysis] = useState({})
   const [backgroundAlerts, setBackgroundAlerts] = useState([])
@@ -302,7 +302,7 @@ function WheelStrategy() {
   return <div className="wheel-page">
     <section className="analysis-heading wheel-heading">
       <div><div className="eyebrow">OPTIONS WORKSPACE <span>·</span> TRACK EVERY LEG</div><h1>Wheel strategy</h1><p>Track cash-secured puts, assignment, covered calls, closes, and the next cycle.</p></div>
-      <button className="wheel-primary-button" onClick={() => { setMode('put'); setTickerChoice('AAPL'); setSymbol('AAPL'); setShowNew((open) => !open) }}>{showNew ? 'Cancel new cycle' : '+ New wheel cycle'}</button>
+      <div className="wheel-heading-actions"><button className="wheel-secondary-button" onClick={() => onAnalyzeOptions?.(selected?.symbol || 'AAPL')}>Compare strikes &amp; dates</button><button className="wheel-primary-button" onClick={() => { setMode('put'); setTickerChoice('AAPL'); setSymbol('AAPL'); setShowNew((open) => !open) }}>{showNew ? 'Cancel new cycle' : '+ New wheel cycle'}</button></div>
     </section>
 
     <div className="wheel-disclaimer"><b>Research tracker, not trade execution.</b> Quote data can be delayed or incomplete. Assignment is determined by your broker; confirm the actual outcome before recording it. Alerts apply only to the thresholds you set.</div>

@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import threading
 import time
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Callable
 
 from fastapi import FastAPI, HTTPException
@@ -296,6 +296,214 @@ def option_chain(symbol: str, expiration: str = "") -> dict[str, Any]:
     except Exception as error:
         logger.exception("Options data request failed for %s", symbol)
         raise HTTPException(status_code=502, detail="Options data is unavailable from the market data source.") from error
+
+
+def _normal_cdf(value: float) -> float:
+    return (1 + math.erf(value / math.sqrt(2))) / 2
+
+
+def _model_greeks(side: str, spot: float, strike: float, years: float, volatility: float,
+                  risk_free_rate: float, dividend_yield: float) -> dict[str, float] | None:
+    """European Black-Scholes Greeks, expressed per share and with explicit assumptions."""
+    if min(spot, strike, years, volatility) <= 0:
+        return None
+    root_time = math.sqrt(years)
+    sigma_root = volatility * root_time
+    d1 = (math.log(spot / strike) + (risk_free_rate - dividend_yield + volatility * volatility / 2) * years) / sigma_root
+    d2 = d1 - sigma_root
+    discount_r = math.exp(-risk_free_rate * years)
+    discount_q = math.exp(-dividend_yield * years)
+    density = math.exp(-d1 * d1 / 2) / math.sqrt(2 * math.pi)
+    if side == "CALL":
+        delta = discount_q * _normal_cdf(d1)
+        theta = (-spot * discount_q * density * volatility / (2 * root_time)
+                 - risk_free_rate * strike * discount_r * _normal_cdf(d2)
+                 + dividend_yield * spot * discount_q * _normal_cdf(d1)) / 365
+        rho = strike * years * discount_r * _normal_cdf(d2) / 100
+    else:
+        delta = discount_q * (_normal_cdf(d1) - 1)
+        theta = (-spot * discount_q * density * volatility / (2 * root_time)
+                 + risk_free_rate * strike * discount_r * _normal_cdf(-d2)
+                 - dividend_yield * spot * discount_q * _normal_cdf(-d1)) / 365
+        rho = -strike * years * discount_r * _normal_cdf(-d2) / 100
+    gamma = discount_q * density / (spot * sigma_root)
+    vega = spot * discount_q * density * root_time / 100
+    return {"delta": delta, "gamma": gamma, "thetaPerDay": theta,
+            "vegaPerVolPoint": vega, "rhoPerRatePoint": rho}
+
+
+def _treasury_proxy() -> dict[str, Any]:
+    def load() -> dict[str, Any]:
+        try:
+            frame = yf.Ticker("^IRX").history(period="10d", interval="1d", auto_adjust=False)
+            if frame is not None and not frame.empty:
+                rate = _number(frame["Close"].dropna().iloc[-1])
+                stamp = frame.index[-1]
+                return {"ratePct": rate, "asOf": stamp.date().isoformat() if hasattr(stamp, "date") else str(stamp)[:10]}
+        except Exception as error:
+            logger.info("Treasury yield proxy unavailable: %s", error)
+        return {"ratePct": None, "asOf": None}
+    return _cached(("options_research_treasury_proxy",), 3600, load)
+
+
+def _historical_strike_stats(closes: list[float], highs: list[float], lows: list[float],
+                             strike_ratio: float, sessions: int, side: str) -> dict[str, Any]:
+    returns: list[float] = []
+    moves_toward_strike: list[float] = []
+    touched = finished_itm = 0
+    for start in range(max(0, len(closes) - sessions)):
+        end = start + sessions
+        base = closes[start]
+        if base <= 0 or end >= len(closes):
+            continue
+        barrier = base * strike_ratio
+        path_high = max(highs[start + 1:end + 1])
+        path_low = min(lows[start + 1:end + 1])
+        close_return = closes[end] / base - 1
+        returns.append(close_return * 100)
+        if side == "PUT":
+            touched += path_low <= barrier
+            finished_itm += closes[end] <= barrier
+            moves_toward_strike.append((path_low / base - 1) * 100)
+        else:
+            touched += path_high >= barrier
+            finished_itm += closes[end] >= barrier
+            moves_toward_strike.append((path_high / base - 1) * 100)
+    count = len(returns)
+    if not count:
+        return {"windows": 0, "touchRate": None, "finishInMoneyRate": None,
+                "averageMoveTowardStrikePct": None, "worstMoveTowardStrikePct": None}
+    return {
+        "windows": count,
+        "touchRate": touched / count,
+        "finishInMoneyRate": finished_itm / count,
+        "averageMoveTowardStrikePct": sum(moves_toward_strike) / count,
+        "worstMoveTowardStrikePct": min(moves_toward_strike) if side == "PUT" else max(moves_toward_strike),
+        "averageHorizonReturnPct": sum(returns) / count,
+        "minimumHorizonReturnPct": min(returns),
+        "maximumHorizonReturnPct": max(returns),
+    }
+
+
+def _realized_volatility_pct(closes: list[float], periods: int) -> float | None:
+    prices = closes[-(periods + 1):]
+    returns = [math.log(prices[index] / prices[index - 1]) for index in range(1, len(prices)) if prices[index] > 0 and prices[index - 1] > 0]
+    if len(returns) < 3:
+        return None
+    average = sum(returns) / len(returns)
+    variance = sum((value - average) ** 2 for value in returns) / (len(returns) - 1)
+    return math.sqrt(variance * 252) * 100
+
+
+@app.get("/api/options/{symbol}/research")
+def option_contract_research(symbol: str, expiration: str, option_type: str = "PUT", lookback: str = "5y") -> dict[str, Any]:
+    symbol = _symbol(symbol)
+    option_type = option_type.upper()
+    if option_type not in {"PUT", "CALL"}:
+        raise HTTPException(status_code=422, detail="Option type must be PUT or CALL.")
+    if lookback not in {"1y", "2y", "5y", "10y"}:
+        raise HTTPException(status_code=422, detail="Lookback must be 1y, 2y, 5y, or 10y.")
+    try:
+        expiry_date = date.fromisoformat(expiration)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail="Expiration must be YYYY-MM-DD.") from error
+    days_to_expiration = max(0, (expiry_date - date.today()).days)
+    if days_to_expiration < 1:
+        raise HTTPException(status_code=422, detail="Choose a future expiration date.")
+
+    def load() -> dict[str, Any]:
+        ticker = yf.Ticker(symbol)
+        if expiration not in list(ticker.options or ()):
+            raise HTTPException(status_code=422, detail="Choose an expiration returned by the options data source.")
+        chain = ticker.option_chain(expiration)
+        frame = chain.puts if option_type == "PUT" else chain.calls
+        contracts = _option_contracts(frame)
+        def load_history() -> Any:
+            frame = ticker.history(period=lookback, interval="1d", auto_adjust=False, actions=False)
+            if frame is None or frame.empty:
+                raise HTTPException(status_code=502, detail="Historical daily prices are unavailable for this ticker.")
+            return frame
+
+        history = _cached(("options_research_history", symbol, lookback), 21600, load_history)
+        if history is None or history.empty:
+            raise HTTPException(status_code=502, detail="Historical daily prices are unavailable for this ticker.")
+        valid_history = history.dropna(subset=["Close", "High", "Low"])
+        close_values = [float(value) for value in valid_history["Close"].tolist()]
+        high_values = [float(value) for value in valid_history["High"].tolist()]
+        low_values = [float(value) for value in valid_history["Low"].tolist()]
+        try:
+            fast_info = dict(ticker.fast_info)
+        except Exception:
+            fast_info = {}
+        spot = _number(_safe_dict_get(fast_info, "last_price")) or (close_values[-1] if close_values else None)
+        if spot is None or not close_values:
+            raise HTTPException(status_code=502, detail="Underlying price is unavailable.")
+        sessions = max(1, round(days_to_expiration * 252 / 365))
+        hv20 = _realized_volatility_pct(close_values, 20)
+        hv60 = _realized_volatility_pct(close_values, 60)
+        historical_expected_move = hv20 * math.sqrt(days_to_expiration / 365) if hv20 is not None else None
+        windows = max(0, len(close_values) - sessions)
+        avg_return = min_return = max_return = None
+        if windows:
+            horizon_returns = [((close_values[index + sessions] / close_values[index]) - 1) * 100 for index in range(windows) if close_values[index] > 0]
+            if horizon_returns:
+                avg_return = sum(horizon_returns) / len(horizon_returns)
+                min_return, max_return = min(horizon_returns), max(horizon_returns)
+        treasury = _treasury_proxy()
+        rate = treasury["ratePct"]
+        rate_decimal = rate / 100 if rate is not None else None
+        try:
+            dividend_series = _cached(("options_research_dividends", symbol), 3600, lambda: ticker.dividends)
+            cutoff = date.today().toordinal() - 365
+            trailing_dividends = sum(float(amount) for stamp, amount in dividend_series.items()
+                                     if (stamp.date() if hasattr(stamp, "date") else stamp).toordinal() >= cutoff) if dividend_series is not None else 0
+        except Exception:
+            trailing_dividends = 0
+        dividend_yield = max(0, trailing_dividends / spot) if spot > 0 else 0
+        years = max(days_to_expiration / 365, 1 / 365)
+        output = []
+        for contract in contracts:
+            strike = contract["strike"]
+            iv = contract["impliedVolatility"]
+            stats = _historical_strike_stats(close_values, high_values, low_values, strike / spot, sessions, option_type)
+            contract_greeks = _model_greeks(option_type, spot, strike, years, iv, rate_decimal, dividend_yield) if rate_decimal is not None and iv is not None else None
+            implied_expected_move = iv * math.sqrt(days_to_expiration / 365) * 100 if iv is not None else None
+            gap_pct = abs((strike / spot - 1) * 100)
+            contract.update({
+                "distancePct": (strike / spot - 1) * 100,
+                "historicalExpectedMovePct": historical_expected_move,
+                "impliedExpectedMovePct": implied_expected_move,
+                "distanceInHistoricalMoves": gap_pct / historical_expected_move if historical_expected_move else None,
+                "distanceInImpliedMoves": gap_pct / implied_expected_move if implied_expected_move else None,
+                "breakEven": strike - contract["mark"] if option_type == "PUT" and contract["mark"] is not None else strike + contract["mark"] if option_type == "CALL" and contract["mark"] is not None else None,
+                "greeks": contract_greeks,
+                "historical": stats,
+            })
+            output.append(contract)
+        stamp = history.index[-1]
+        data_date = stamp.date().isoformat() if hasattr(stamp, "date") else str(stamp)[:10]
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        return {
+            "symbol": symbol, "optionType": option_type, "expiration": expiration,
+            "daysToExpiration": days_to_expiration, "underlyingPrice": spot,
+            "historyDataDate": data_date, "retrievedAt": now, "lookback": lookback,
+            "horizonSessions": sessions, "sampleWindows": windows,
+            "historicalVolatility20dPct": hv20, "historicalVolatility60dPct": hv60,
+            "historicalExpectedMovePct": historical_expected_move,
+            "horizonReturns": {"averagePct": avg_return, "minimumPct": min_return, "maximumPct": max_return},
+            "riskFreeRatePct": rate, "riskFreeRateDate": treasury["asOf"],
+            "trailingDividendYieldPct": dividend_yield * 100,
+            "greeksModel": "Black-Scholes European approximation; per share; IV from selected contract",
+            "contracts": output, "source": "Yahoo Finance via yfinance",
+        }
+
+    try:
+        return _cached(("option_research", symbol, expiration, option_type, lookback), 90, load)
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("Option strike research failed for %s", symbol)
+        raise HTTPException(status_code=502, detail="Option research data is temporarily unavailable.") from error
 
 
 @app.get("/api/wheel")

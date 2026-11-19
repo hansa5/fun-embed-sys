@@ -41,6 +41,11 @@ America); custom tickers can be added to that browser's local target list.
 Cycles can be deleted from the list after a confirmation prompt. Deleting a
 cycle permanently removes its option legs and event history from SQLite.
 
+Use [Options Research](options-greeks-and-strikes.md) from the workspace or the
+“Compare strikes & dates” button to compare listed expirations, strikes,
+historical price paths, volatility, and model-estimated Greeks before recording
+a put or covered call.
+
 ## Record a cycle
 
 Start with a cash-secured put by choosing the symbol, expiration, strike,
