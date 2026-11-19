@@ -43,8 +43,8 @@ SSH channel. Do not paste your sudo password into chat; run the helper in a
 terminal on the Pi.
 
 The Pi boots from its 59 GB microSD (`/dev/mmcblk0p2`); this SSD hosts the app
-checkout and app data. Mount options, UUID, and the service dependency on the
-mount are recorded in `/etc/fstab` and the user service override after setup.
+checkout and app data. Mount options and UUID are recorded in `/etc/fstab`;
+the user service checks for an ext4 mount at the SSD mountpoint before start.
 
 ## SQLite wheel database location
 

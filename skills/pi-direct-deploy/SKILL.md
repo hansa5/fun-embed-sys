@@ -18,7 +18,7 @@ For the one-time move from the legacy SD checkout, read `docs/rpi/storage.md`. T
 
 ## Redeploy on the same Pi
 
-After the push succeeds, run `./install.sh` from the SSD-backed repository root to synchronize dependencies and rebuild the frontend. Inspect which existing service is installed and active. Prefer `fun-embed-app.service`; if the legacy user service `fun-embed-docs.service` is active instead, restart that unit. Confirm the service depends on `/mnt/saman-ssd` so it cannot silently run from the SD-card mountpoint when the SSD is absent. Restart only the existing service, then check its status and `curl -fsS http://127.0.0.1:8501/api/health`. Confirm the deployed checkout and `data/wheel.sqlite3` resolve onto the SSD and that the checkout points at the pushed commit.
+After the push succeeds, run `./install.sh` from the SSD-backed repository root to synchronize dependencies and rebuild the frontend. Inspect which existing service is installed and active. Prefer `fun-embed-app.service`; if the legacy user service `fun-embed-docs.service` is active instead, restart that unit. Confirm the user service has an `ExecStartPre` guard for an ext4 mount at `/mnt/saman-ssd` so it cannot silently run from the SD-card mountpoint when the SSD is absent. Restart only the existing service, then check its status and `curl -fsS http://127.0.0.1:8501/api/health`. Confirm the deployed checkout and `data/wheel.sqlite3` resolve onto the SSD and that the checkout points at the pushed commit.
 
 If installation, restart, or health verification fails, inspect logs and report the point of failure. Do not silently edit service configuration, install a new service, force-push, or discard local work. Ask before changes that erase data or alter system configuration.
 

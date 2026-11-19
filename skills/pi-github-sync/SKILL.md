@@ -26,7 +26,7 @@ Known devices in this project:
 
 Use the exact Pi named by the user. If they ask to update both, handle them separately. Discover SSH usernames, aliases, and checkout paths from the user's SSH config and project documentation. Do not guess a username or repository path; ask if it cannot be determined. Use the hostname as written, for example `ssh USER@Hansa.local`.
 
-For Saman, the deployed Fun Embed checkout is `/mnt/saman-ssd/git_repo/fun-embed-sys`. Confirm `/mnt/saman-ssd` is mounted from the SSD before pulling or running `./install.sh`; stop if the mount is missing so a deploy cannot silently land on the SD card. The SQLite database defaults to `data/wheel.sqlite3` inside that checkout. The old `~/Documents/git_repo/fun-embed-sys` directory is a rollback copy, not the active deployment.
+For Saman, the deployed Fun Embed checkout is `/mnt/saman-ssd/git_repo/fun-embed-sys`. Confirm `/mnt/saman-ssd` is mounted from the SSD before pulling or running `./install.sh`; stop if the mount is missing so a deploy cannot silently land on the SD card. The user service's `ExecStartPre` should enforce an ext4 mount at that mountpoint. The SQLite database defaults to `data/wheel.sqlite3` inside that checkout. The old `~/Documents/git_repo/fun-embed-sys` directory is a rollback copy, not the active deployment.
 
 For the one-time initial move from the SD checkout, follow `docs/rpi/storage.md` and `migrate-to-ssd.sh`. Do not pull the new app revision into the legacy checkout before migration. If partition formatting or `/etc/fstab` changes need interactive sudo, do not ask for the user's password; transfer the helper to the existing checkout and have the user run it from a Pi terminal.
 

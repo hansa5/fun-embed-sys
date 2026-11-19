@@ -146,14 +146,12 @@ mkdir -p "$(dirname "$SERVICE_OVERRIDE")"
 cp -a "$SERVICE_OVERRIDE" "$OVERRIDE_BACKUP"
 OVERRIDE_UPDATED=1
 cat > "$SERVICE_OVERRIDE" <<EOF
-[Unit]
-RequiresMountsFor=$MOUNT_POINT
-
 [Service]
 WorkingDirectory=$NEW_REPO
 ExecStart=
 ExecStart=$NEW_REPO/run-app.sh
 Environment=
+ExecStartPre=/usr/bin/findmnt -rn -M $MOUNT_POINT -t ext4
 EOF
 chown "$APP_USER:$APP_USER" "$SERVICE_OVERRIDE"
 user_systemctl daemon-reload
