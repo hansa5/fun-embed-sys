@@ -7,6 +7,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import WheelStrategy from './WheelStrategy.jsx'
+import MarketRadar from './MarketRadar.jsx'
 
 echarts.use([BarChart, CandlestickChart, DataZoomComponent, GridComponent, TooltipComponent, CanvasRenderer])
 
@@ -233,7 +234,7 @@ function App() {
   const docs = useDocuments()
   const initialQuery = new URLSearchParams(window.location.search)
   const initialDoc = initialQuery.get('doc') || ''
-  const [page, setPage] = useState(initialDoc ? 'docs' : initialQuery.has('wheel') ? 'wheel' : initialQuery.has('earnings') ? 'earnings' : 'analysis')
+  const [page, setPage] = useState(initialDoc ? 'docs' : initialQuery.has('wheel') ? 'wheel' : initialQuery.has('earnings') ? 'earnings' : initialQuery.has('radar') ? 'radar' : 'analysis')
   const [docsExpanded, setDocsExpanded] = useState(Boolean(initialDoc))
   const [docPath, setDocPath] = useState(initialDoc || 'README.md')
   const [docSearch, setDocSearch] = useState('')
@@ -282,6 +283,7 @@ function App() {
     query.delete('doc')
     query.delete('earnings')
     query.delete('wheel')
+    query.delete('radar')
     const suffix = query.toString() ? `?${query.toString()}` : ''
     window.history.pushState({}, '', `${window.location.pathname}${suffix}`)
     setPage('analysis')
@@ -292,6 +294,7 @@ function App() {
     const query = new URLSearchParams(window.location.search)
     query.delete('doc')
     query.delete('wheel')
+    query.delete('radar')
     query.set('earnings', '1')
     window.history.pushState({}, '', `${window.location.pathname}?${query.toString()}`)
     setPage('earnings')
@@ -303,9 +306,22 @@ function App() {
     const query = new URLSearchParams(window.location.search)
     query.delete('doc')
     query.delete('earnings')
+    query.delete('radar')
     query.set('wheel', '1')
     window.history.pushState({}, '', `${window.location.pathname}?${query.toString()}`)
     setPage('wheel')
+    setSidebarOpen(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  const showRadar = useCallback(() => {
+    const query = new URLSearchParams(window.location.search)
+    query.delete('doc')
+    query.delete('earnings')
+    query.delete('wheel')
+    query.set('radar', '1')
+    window.history.pushState({}, '', `${window.location.pathname}?${query.toString()}`)
+    setPage('radar')
     setSidebarOpen(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
@@ -314,7 +330,7 @@ function App() {
     const onPopState = () => {
       const doc = new URLSearchParams(window.location.search).get('doc')
       const query = new URLSearchParams(window.location.search)
-      if (doc) { setDocPath(doc); setPage('docs'); setDocsExpanded(true) } else if (query.has('wheel')) setPage('wheel'); else if (query.has('earnings')) setPage('earnings'); else setPage('analysis')
+      if (doc) { setDocPath(doc); setPage('docs'); setDocsExpanded(true) } else if (query.has('wheel')) setPage('wheel'); else if (query.has('earnings')) setPage('earnings'); else if (query.has('radar')) setPage('radar'); else setPage('analysis')
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
@@ -423,6 +439,7 @@ function App() {
         <nav className="primary-nav" aria-label="Main navigation">
           <button className={`primary-nav-item ${page === 'analysis' ? 'selected' : ''}`} onClick={showAnalysis}><Icon name="chart" /><span>Stock Analysis</span></button>
           <button className={`primary-nav-item ${page === 'earnings' ? 'selected' : ''}`} onClick={showEarnings}><Icon name="chart" /><span>Earnings calendar</span></button>
+          <button className={`primary-nav-item ${page === 'radar' ? 'selected' : ''}`} onClick={showRadar}><Icon name="chart" /><span>Market radar</span></button>
           <button className={`primary-nav-item ${page === 'wheel' ? 'selected' : ''}`} onClick={showWheel}><Icon name="chart" /><span>Wheel strategy</span></button>
           <button className={`primary-nav-item ${page === 'docs' || docsExpanded ? 'docs-selected' : ''}`} aria-expanded={docsExpanded} onClick={() => setDocsExpanded((open) => !open)}><Icon name="book" /><span>Docs</span><span className={`nav-chevron ${docsExpanded ? 'rotated' : ''}`}><Icon name="chevron" size={15} /></span></button>
         </nav>
@@ -441,11 +458,11 @@ function App() {
       <main className="workspace-main">
         <header className="workspace-topbar">
           <button className="mobile-nav-toggle" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Icon name="menu" /></button>
-          <div className="topbar-title">{page === 'analysis' ? 'Market overview' : page === 'earnings' ? 'Earnings calendar' : page === 'wheel' ? 'Wheel strategy' : 'Documentation'}</div>
+          <div className="topbar-title">{page === 'analysis' ? 'Market overview' : page === 'earnings' ? 'Earnings calendar' : page === 'radar' ? 'Market radar' : page === 'wheel' ? 'Wheel strategy' : 'Documentation'}</div>
           <div className="topbar-right"><span className="market-dot" /> <span>DATA FEED · YAHOO FINANCE</span></div>
         </header>
 
-        {page === 'wheel' ? <WheelStrategy /> : page === 'analysis' ? <div className="analysis-page">
+        {page === 'wheel' ? <WheelStrategy /> : page === 'radar' ? <MarketRadar onSelectTicker={(ticker) => selectStock({ symbol: ticker })} /> : page === 'analysis' ? <div className="analysis-page">
           <section className="analysis-heading">
             <div><div className="eyebrow">YOUR MARKET WORKSPACE <span>·</span> LEARN AS YOU EXPLORE</div><h1>Stock analysis</h1><p>Explore price history, company metrics, and reported financials.</p></div>
             <div className="market-status"><span className="market-dot" /> PERSONAL RESEARCH DATA</div>

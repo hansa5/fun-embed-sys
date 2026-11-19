@@ -153,6 +153,7 @@ function ContractPicker({ symbol, type, onValues, compact = false }) {
 function WheelStrategy() {
   const [cycles, setCycles] = useState([])
   const [analysis, setAnalysis] = useState({})
+  const [backgroundAlerts, setBackgroundAlerts] = useState([])
   const [selectedId, setSelectedId] = useState('')
   const [selectedDetails, setSelectedDetails] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -198,9 +199,17 @@ function WheelStrategy() {
     try {
       const items = await api('/api/wheel')
       setCycles(items)
+      try { setBackgroundAlerts(await api('/api/wheel/alerts')) } catch { setBackgroundAlerts([]) }
       setSelectedId((current) => current && items.some((item) => item.id === current) ? current : items[0]?.id || '')
     } catch (reason) { setError(reason.message) } finally { setLoading(false) }
   }, [])
+
+  async function dismissBackgroundAlert(alertId) {
+    try {
+      await api(`/api/wheel/alerts/${alertId}/dismiss`, { method: 'POST' })
+      setBackgroundAlerts((items) => items.filter((item) => item.id !== alertId))
+    } catch (reason) { setError(reason.message) }
+  }
 
   useEffect(() => { refresh() }, [refresh])
   useEffect(() => {
@@ -297,6 +306,7 @@ function WheelStrategy() {
     </section>
 
     <div className="wheel-disclaimer"><b>Research tracker, not trade execution.</b> Quote data can be delayed or incomplete. Assignment is determined by your broker; confirm the actual outcome before recording it. Alerts apply only to the thresholds you set.</div>
+    {backgroundAlerts.length > 0 && <section className="panel wheel-panel wheel-background-alerts"><div className="wheel-panel-heading"><div><span className="panel-kicker">SCHEDULED MARKET CHECKS</span><h2>Review alerts <span className="wheel-alert-count">{backgroundAlerts.length}</span></h2></div><small>Checks run every 15 minutes during US market hours.</small></div><div className="wheel-background-alert-list">{backgroundAlerts.map((alert) => <div key={alert.id} className={`wheel-background-alert wheel-background-${alert.level}`}><button className="wheel-background-alert-main" onClick={() => setSelectedId(alert.cycleId)}><b>{alert.symbol}</b><span>{alert.message}</span><small>Last checked {new Date(alert.lastSeen).toLocaleString()}</small></button><button className="wheel-quiet-button" onClick={() => dismissBackgroundAlert(alert.id)}>Dismiss</button></div>)}</div><div className="wheel-form-note">These alerts flag your saved thresholds for review. They do not select a trade or place an order.</div></section>}
     {error && <div className="wheel-error">{error}</div>}
 
     {showNew && <section className="panel wheel-panel new-wheel-panel">
@@ -362,6 +372,7 @@ function WheelStrategy() {
               </div>
               <div className="wheel-analysis-box">
                 <div className="wheel-analysis-title"><b>Market checks</b><span>{selectedAnalysis?.marketAvailable ? 'Yahoo Finance · refreshed every minute' : 'Waiting for option quote'}</span></div>
+                {selectedAnalysis?.reviewGuidance && <div className="wheel-review-guidance"><b>{selectedAnalysis.reviewGuidance.status}</b><span>{selectedAnalysis.reviewGuidance.message}</span><small>Rule-based review context, not an instruction to trade.</small></div>}
                 {selectedAnalysis?.underlyingPrice != null && <div className="wheel-market-metrics"><span>Underlying <b>{money(selectedAnalysis.underlyingPrice)}</b></span><span>Option mark <b>{money(selectedAnalysis.optionMark)}</b></span><span>Open P&amp;L <b className={(selectedAnalysis.unrealizedPnl || 0) >= 0 ? 'wheel-positive' : 'wheel-negative'}>{money(selectedAnalysis.unrealizedPnl)}</b></span><span>Captured <b>{selectedAnalysis.premiumCapturedPercent == null ? '—' : `${selectedAnalysis.premiumCapturedPercent.toFixed(0)}%`}</b></span><span>Break-even at expiry <b>{money(selectedAnalysis.breakEvenAtExpiration)}</b></span>{selectedAnalysis.coveredCallAssignmentPnl != null && <span>If assigned <b className={selectedAnalysis.coveredCallAssignmentPnl >= 0 ? 'wheel-positive' : 'wheel-negative'}>{money(selectedAnalysis.coveredCallAssignmentPnl)}</b></span>}<span>Days left <b>{selectedAnalysis.daysToExpiration}</b></span></div>}
                 <p>{selectedAnalysis?.nextScenarios || (selected.activeLeg.type === 'PUT' ? 'If OTM at expiry: cash-ready for another put. If assigned: shares-held, then covered calls.' : 'If OTM at expiry: keep shares and consider the next call. If assigned: shares are called away and the cycle returns to puts.')}</p>
                 {selectedAnalysis?.alerts?.length > 0 && <div className="wheel-alert-list">{selectedAnalysis.alerts.map((alert, index) => <div key={`${alert.code || alert.message}-${index}`} className={`wheel-alert wheel-alert-${alert.level}`}><span>{alert.level === 'risk' ? '!' : alert.level === 'action' ? '●' : '·'}</span>{alert.message}</div>)}</div>}

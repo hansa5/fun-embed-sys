@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import yfinance as yf
-from backend import wheel
+from backend import market_radar, wheel
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS_ROOT = (REPO_ROOT / "docs").resolve()
@@ -307,6 +307,83 @@ def list_wheel_cycles() -> list[dict[str, Any]]:
         raise HTTPException(status_code=503, detail="Wheel tracking storage is unavailable.") from error
 
 
+@app.get("/api/wheel/alerts")
+def get_wheel_background_alerts() -> list[dict[str, Any]]:
+    try:
+        return market_radar.list_wheel_alerts()
+    except Exception as error:
+        logger.exception("Wheel alerts could not be read")
+        raise HTTPException(status_code=503, detail="Wheel alert storage is unavailable.") from error
+
+
+@app.post("/api/wheel/alerts/{alert_id}/dismiss")
+def dismiss_wheel_background_alert(alert_id: int) -> dict[str, bool]:
+    try:
+        if not market_radar.dismiss_wheel_alert(alert_id):
+            raise HTTPException(status_code=404, detail="Active alert not found.")
+        return {"dismissed": True}
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("Wheel alert could not be dismissed")
+        raise HTTPException(status_code=503, detail="Wheel alert storage is unavailable.") from error
+
+
+@app.get("/api/market/radar")
+def get_market_radar() -> dict[str, Any]:
+    try:
+        return market_radar.latest_radar()
+    except Exception as error:
+        logger.exception("Market radar could not be read")
+        raise HTTPException(status_code=503, detail="Market radar storage is unavailable.") from error
+
+
+@app.get("/api/market/radar/watchlist")
+def get_market_radar_watchlist() -> list[dict[str, str]]:
+    try:
+        return market_radar.list_watchlist()
+    except Exception as error:
+        logger.exception("Radar watchlist could not be read")
+        raise HTTPException(status_code=503, detail="Market watchlist is unavailable.") from error
+
+
+@app.post("/api/market/radar/watchlist")
+def add_market_radar_symbol(payload: dict[str, Any]) -> dict[str, str]:
+    try:
+        return market_radar.add_watch_symbol(str(payload.get("symbol", "")), str(payload.get("name") or ""))
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except Exception as error:
+        logger.exception("Radar watchlist symbol could not be added")
+        raise HTTPException(status_code=503, detail="Market watchlist is unavailable.") from error
+
+
+@app.delete("/api/market/radar/watchlist/{symbol}")
+def remove_market_radar_symbol(symbol: str) -> dict[str, bool]:
+    try:
+        if not market_radar.remove_watch_symbol(symbol):
+            raise HTTPException(status_code=404, detail="Ticker is not in the custom watchlist.")
+        return {"removed": True}
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("Radar watchlist symbol could not be removed")
+        raise HTTPException(status_code=503, detail="Market watchlist is unavailable.") from error
+
+
+@app.post("/api/market/radar/scan")
+def scan_market_radar() -> dict[str, Any]:
+    try:
+        universe = list(POPULAR_STOCKS) + [item for item in EARNINGS_WATCHLIST if item["symbol"] not in {s["symbol"] for s in POPULAR_STOCKS}]
+        universe.append({"symbol": "SPY", "name": "SPDR S&P 500 ETF Trust"})
+        universe.extend({"symbol": cycle["symbol"], "name": cycle["symbol"]} for cycle in wheel.list_cycles())
+        universe.extend(market_radar.list_watchlist())
+        return market_radar.run_radar(universe)
+    except Exception as error:
+        logger.exception("Market radar scan failed")
+        raise HTTPException(status_code=502, detail="Market data scan failed. Try again later.") from error
+
+
 @app.post("/api/wheel")
 def create_wheel_cycle(payload: dict[str, Any]) -> dict[str, Any]:
     try:
@@ -415,6 +492,20 @@ def analyze_wheel_cycle(cycle_id: str) -> dict[str, Any]:
             alerts.append({"level": "watch", "code": "expiration_soon", "message": f"{days} days remain to expiration; confirm the broker's expiration and assignment outcome."})
         if not quote:
             alerts.append({"level": "info", "code": "quote_unavailable", "message": "No matching option quote is available; automatic premium alerts are paused."})
+        if not (underlying is not None and quote is not None):
+            review_guidance = {"status": "Data incomplete", "message": "Wait for a current underlying price and matching option quote before using market-based checks. Confirm quotes at your broker."}
+        elif days <= 0:
+            review_guidance = {"status": "Confirm expiration outcome", "message": "The expiration date has arrived. Check your broker for assignment or expiration status, then record the confirmed transition."}
+        elif cycle["takeProfitPercent"] is not None and captured is not None and captured >= cycle["takeProfitPercent"]:
+            review_guidance = {"status": "Review configured profit threshold", "message": f"The position has captured about {captured:.0f}% of its opening credit. Compare the remaining credit with your saved rule and closing costs before deciding whether to close."}
+        elif cycle["maxLossDollars"] is not None and unrealized is not None and unrealized <= -cycle["maxLossDollars"]:
+            review_guidance = {"status": "Review configured loss threshold", "message": "The current option mark crosses your saved loss threshold. Check the live bid/ask and your planned risk response."}
+        elif days <= cycle["expiryAlertDays"]:
+            review_guidance = {"status": "Monitor near expiration", "message": "Expiration is within your alert window. Review the underlying versus strike, after-hours movement, and your broker's assignment process."}
+        elif (leg["type"] == "PUT" and underlying < leg["strike"]) or (leg["type"] == "CALL" and underlying > leg["strike"]):
+            review_guidance = {"status": "Monitor assignment exposure", "message": "The underlying is past the option strike. Assignment is possible; review the shares or cash exposure you would accept."}
+        else:
+            review_guidance = {"status": "Continue monitoring", "message": "No saved threshold is currently met. If the option expires OTM, confirm the result with your broker; if assigned, record shares and continue the wheel from that state."}
         next_states = ("PUT_CASH_READY after OTM expiry or closing; SHARES_HELD if assigned" if leg["type"] == "PUT"
                        else "SHARES_HELD after OTM expiry or closing; PUT_CASH_READY if all covered shares are assigned")
         return {"cycleId": cycle_id, "state": cycle["state"], "underlyingPrice": underlying,
@@ -423,6 +514,7 @@ def analyze_wheel_cycle(cycle_id: str) -> dict[str, Any]:
                 "premiumCapturedPercent": captured, "breakEvenAtExpiration": breakeven,
                 "coveredCallAssignmentPnl": assignment_pnl,
                 "daysToExpiration": days, "nextScenarios": next_states, "alerts": alerts,
+                "reviewGuidance": review_guidance,
                 "marketAvailable": underlying is not None and quote is not None,
                 "dataSource": "Yahoo Finance via yfinance; quotes may be delayed or unavailable"}
     except Exception as error:

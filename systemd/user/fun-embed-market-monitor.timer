@@ -1,0 +1,10 @@
+[Unit]
+Description=Schedule Fun Embed market and wheel checks
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+Unit=fun-embed-market-monitor.service
+
+[Install]
+WantedBy=timers.target

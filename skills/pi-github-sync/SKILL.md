@@ -47,9 +47,10 @@ Verify the Pi's resulting commit matches the pushed commit. If SSH or the pull f
 When the user requested that the Fun Embed app be updated or rerun on Saman's Pi, follow `docs/rpi/web_app.md` after the successful pull:
 
 1. Run `./install.sh` from the repository root to synchronize locked dependencies and rebuild `frontend/dist/`.
-2. Inspect the current service manager before restarting. Prefer the installed system unit `fun-embed-app.service` (`sudo systemctl restart` and `sudo systemctl status`). This app may also use the legacy user unit `fun-embed-docs.service`; if that is the active unit instead, restart and inspect it with `systemctl --user`.
-3. Confirm the app responds with `curl -fsS http://127.0.0.1:8501/api/health` and verify the checkout commit still matches the pushed commit.
-4. If neither unit exists, do not create or enable a service unless the user explicitly requested service installation. If they asked only to rerun an existing app, report that no managed service is installed and ask how they want it run.
+2. Run `sudo bash install-market-monitor.sh` from the SSD repository root to install or refresh the scheduled 15-minute wheel monitor and daily market radar timer. Verify `systemctl --user is-active fun-embed-market-monitor.timer` and `systemctl --user list-timers fun-embed-market-monitor.timer`.
+3. Inspect the current service manager before restarting. Prefer the installed system unit `fun-embed-app.service` (`sudo systemctl restart` and `sudo systemctl status`). This app may also use the legacy user unit `fun-embed-docs.service`; if that is the active unit instead, restart and inspect it with `systemctl --user`.
+4. Confirm the app responds with `curl -fsS http://127.0.0.1:8501/api/health` and verify the checkout commit still matches the pushed commit.
+5. If neither unit exists, do not create or enable a service unless the user explicitly requested service installation. If they asked only to rerun an existing app, report that no managed service is installed and ask how they want it run.
 
 If the install, restart, or health check fails, inspect the relevant output and service logs without resetting the checkout or changing service configuration. Report what succeeded and where the deployment stopped.
 

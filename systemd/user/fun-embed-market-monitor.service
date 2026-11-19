@@ -1,0 +1,9 @@
+[Unit]
+Description=Fun Embed market and wheel research monitor
+After=network-online.target fun-embed-docs.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/mnt/saman-ssd/git_repo/fun-embed-sys
+ExecStart=/mnt/saman-ssd/git_repo/fun-embed-sys/.venv/bin/python -m backend.jobs.market_monitor
+TimeoutStartSec=10min

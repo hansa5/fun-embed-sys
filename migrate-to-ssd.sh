@@ -166,6 +166,7 @@ done
 as_saman mkdir -p "$APP_HOME/.codex/skills/pi-direct-deploy" "$APP_HOME/.codex/skills/pi-github-sync"
 as_saman cp "$NEW_REPO/skills/pi-direct-deploy/SKILL.md" "$APP_HOME/.codex/skills/pi-direct-deploy/SKILL.md"
 as_saman cp "$NEW_REPO/skills/pi-github-sync/SKILL.md" "$APP_HOME/.codex/skills/pi-github-sync/SKILL.md"
+/bin/bash "$NEW_REPO/install-market-monitor.sh"
 echo
 echo "SSD mount: $(findmnt -n -o SOURCE,FSTYPE --target "$NEW_REPO")"
 echo "Repository: $NEW_REPO"
